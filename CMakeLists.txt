@@ -21,6 +21,6 @@ target_include_directories(POA PRIVATE
 
 # 设置默认构建类型为Release（自动包含-O3）
 # 放在project()之后，任何目标定义之前
-if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release)
-endif()
+# if(NOT CMAKE_BUILD_TYPE)
+#   set(CMAKE_BUILD_TYPE Release)
+# endif()
