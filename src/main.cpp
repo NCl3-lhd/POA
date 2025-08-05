@@ -3,7 +3,8 @@
 #include "handle_input.h"
 #include "parameter.h"
 #include "graph.h"
-
+#include "align.h"
+// #include "alignment"
 
 // extern unsigned char nt4_table[256];
 int main(int argc, char** argv) {
@@ -15,9 +16,9 @@ int main(int argc, char** argv) {
     ("i,input", "input path", cxxopts::value<std::string>())
     ("m,mat_fp", "match file path", cxxopts::value<std::string>())
     ("M,match", "match sorce", cxxopts::value<int>()->default_value("1"))
-    ("X,mismatch", "mismatch sorce", cxxopts::value<int>()->default_value("0"))
-    ("O,gap_open", "gap_open sorce", cxxopts::value<int>()->default_value("0"))
-    ("E,gap_ext", "gap_ext sorce", cxxopts::value<int>()->default_value("0"))
+    ("X,mismatch", "mismatch sorce", cxxopts::value<int>()->default_value("-2"))
+    ("O,gap_open", "gap_open sorce", cxxopts::value<int>()->default_value("-3"))
+    ("E,gap_ext", "gap_ext sorce", cxxopts::value<int>()->default_value("-1"))
     ("h,help", "Print usage")
     ;
   std::string path;
@@ -53,18 +54,30 @@ int main(int argc, char** argv) {
     std::cerr << "error read file: " << e.what() << std::endl;
     return 1;
   }
-  std::cout << char256_table[4] << "\n";
   std::cout << seqs.size() << "\n";
   // handle alignment 
   graph DAG;
-  // DAG.init(seqs[0]);
-  for (int i = 1; i < seqs.size(); i++) {
-
-    // ret = POA(DAG, seqs[i]);
+  // seqs[0].seq = "GAAAAGATTTACATAATACTTAGAAAATTTTCCTGGTGGGTTAACTCTGAGCTATGATTTTTTAA";
+  // seqs[1].seq = "GAATGATTATGATATACTTAGAAAATTTTAAGTTAATGCACTGTTTCCGACAAATGTGATGATTTTTTAATGATT";
+  DAG.init(seqs[0].seq, para->m, 0);
+  std::cout << seqs[0].seq << "\n" << seqs[1].seq << "\n";
+  for (int i = 1; i < 2; i++) {  //seqs.size()
+    std::string tseq;
+    tseq += char26_table['N'];
+    for (int j = 0; j < seqs[i].seq.size(); j++) {
+      // std::cout << (int)char26_table[seqs[i].seq[j]] << " ";
+      tseq += char26_table[seqs[i].seq[j]];
+    }
+    POA(para, DAG, tseq);
     // DAG.add_path(ret);
     // DAG.topsort();
   }
 
   // handle output 
+
+
+  // delete
+  delete para;
+  para = nullptr;  // 防止后续误用
   return 0;
 }

@@ -40,6 +40,11 @@ std::vector<seq_t> readFile(const char* path) {
 }
 // handle input arg
 void initPara(para_t* para) {
+  //handle incorrect para
+  if (para->match < 0) para->m *= -1;
+  if (para->mismatch > 0) para->mismatch *= -1;
+  if (para->gap_open1 > 0) para->gap_open1 *= -1;
+  if (para->gap_ext1 > 0) para->gap_ext1 *= -1;
   para->m = 5; // default m = Nucleotide num
   if (para->mat_fp.empty()) {
     int m = para->m;

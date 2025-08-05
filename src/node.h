@@ -1,15 +1,50 @@
 #ifndef NODE_H
 #define NODE_H
 #include <vector>
-struct node {
+#include <iostream>
+struct node_t {
   // 成员声明
-  int rank;
-  char base;
-  std::vector<int> in, out;
-  int isPar;
+  int id, rank, isPar;
+  unsigned char base;
+  std::vector<int> in, in_weight, out, out_weight;
   std::vector<int> aligned_node;
-
-
+  std::vector<int> ids;
+  node_t();
+  node_t(int _id, unsigned char _base, int m) {
+    base = _base;
+    id = isPar = _id;
+    aligned_node.resize(m);
+  }
+  void add_in_adj(int seq_id, int from) {
+    int ok = 0;
+    for (int i = 0; i < in.size(); i++) {
+      if (from == in[i]) {
+        in_weight[i]++;
+        ok = 1;
+        break;
+      }
+    }
+    if (!ok) {
+      in.emplace_back(from);
+      in_weight.emplace_back(1);
+    }
+    if (ids.empty() || ids.back() != seq_id) ids.emplace_back(seq_id);
+  }
+  void add_out_adj(int seq_id, int to) {
+    int ok = 0;
+    for (int i = 0; i < out.size(); i++) {
+      if (to == out[i]) {
+        out_weight[i]++;
+        ok = 1;
+        break;
+      }
+    }
+    if (!ok) {
+      out.emplace_back(to);
+      out_weight.emplace_back(1);
+    }
+    if (ids.empty() || ids.back() != seq_id) ids.emplace_back(seq_id);
+  }
 };
 // std::vector<sequence> readFile(const char* path);
 #endif
