@@ -4,7 +4,7 @@
 #include "parameter.h"
 #include "graph.h"
 #include "align.h"
-// #include "alignment"
+// #include "kband.h"
 
 // extern unsigned char nt4_table[256];
 int main(int argc, char** argv) {
@@ -15,10 +15,10 @@ int main(int argc, char** argv) {
   options.add_options()
     ("i,input", "input path", cxxopts::value<std::string>())
     ("m,mat_fp", "match file path", cxxopts::value<std::string>())
-    ("M,match", "match sorce", cxxopts::value<int>()->default_value("1"))
-    ("X,mismatch", "mismatch sorce", cxxopts::value<int>()->default_value("-2"))
-    ("O,gap_open", "gap_open sorce", cxxopts::value<int>()->default_value("-3"))
-    ("E,gap_ext", "gap_ext sorce", cxxopts::value<int>()->default_value("-1"))
+    ("M,match", "match sorce", cxxopts::value<int>()->default_value("2"))
+    ("X,mismatch", "mismatch sorce", cxxopts::value<int>()->default_value("-4"))
+    ("O,gap_open", "gap_open sorce", cxxopts::value<int>()->default_value("-4"))
+    ("E,gap_ext", "gap_ext sorce", cxxopts::value<int>()->default_value("-2"))
     ("h,help", "Print usage")
     ;
   std::string path;
@@ -45,6 +45,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   initPara(para);
+
   // handle input
   std::vector<seq_t> seqs;
   try {
@@ -54,28 +55,49 @@ int main(int argc, char** argv) {
     std::cerr << "error read file: " << e.what() << std::endl;
     return 1;
   }
-  std::cout << seqs.size() << "\n";
+  for (auto it = seqs.begin(); it != seqs.end();) {
+    if (it->comment.find("HVS-II") != std::string::npos) {
+      it = seqs.erase(it);
+    }
+    else it++;
+  }
   // handle alignment 
   graph DAG;
-  // seqs[0].seq = "GAAAAGATTTACATAATACTTAGAAAATTTTCCTGGTGGGTTAACTCTGAGCTATGATTTTTTAA";
-  // seqs[1].seq = "GAATGATTATGATATACTTAGAAAATTTTAAGTTAATGCACTGTTTCCGACAAATGTGATGATTTTTTAATGATT";
-  DAG.init(seqs[0].seq, para->m, 0);
-  std::cout << seqs[0].seq << "\n" << seqs[1].seq << "\n";
-  for (int i = 1; i < 2; i++) {  //seqs.size()
+  DAG.init(para->m, 0, seqs[0].seq);
+  // seqs[0].seq = "TTGCCCTT";
+  // seqs[1].seq = "CCAATTTT";
+  // seqs[2].seq = "TGCT";
+  for (int i = 1; i < seqs.size(); i++) {  //seqs.size()
+    std::cerr << i << "\n";
     std::string tseq;
     tseq += char26_table['N'];
     for (int j = 0; j < seqs[i].seq.size(); j++) {
-      // std::cout << (int)char26_table[seqs[i].seq[j]] << " ";
       tseq += char26_table[seqs[i].seq[j]];
     }
-    POA(para, DAG, tseq);
-    // DAG.add_path(ret);
-    // DAG.topsort();
+    // std::cerr << "poa" << "\n";
+    std::vector<res_t> res = POA(para, DAG, tseq);
+    // std::cerr << "add_path" << "\n";
+    DAG.add_path(para->m, i, res);
+    // std::cerr << "topsort" << "\n";
+    DAG.topsort(i + 1 == seqs.size());
+    // std::cout << i << " " << DAG.rank.size() << "\n";
   }
-
   // handle output 
+  DAG.output_rc_msa(seqs);
 
 
+
+  // std::cout << "correct check" << "\n";
+  // std::string s1 = "TTGCCCTT";
+  // std::string s2 = "CCAATTTT";
+  // std::string s3 = "CCTT";
+  // std::string s4 = "TTGCCCAATTTT";
+  // std::string alignedS, alignedT;
+  // std::cout << PSA_Kband(s1, seqs[2].seq, &alignedS, &alignedT) << "\n";
+  // std::cout << alignedS << " " << alignedT << "\n";
+  // std::cout << PSA_Kband(s2, seqs[2].seq, nullptr, nullptr) << "\n";
+  // std::cout << PSA_Kband(s3, seqs[2].seq, nullptr, nullptr) << "\n";
+  // std::cout << PSA_Kband(s4, seqs[2].seq, nullptr, nullptr) << "\n";
   // delete
   delete para;
   para = nullptr;  // 防止后续误用

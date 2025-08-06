@@ -4,7 +4,7 @@
 #include <iostream>
 struct node_t {
   // 成员声明
-  int id, rank, isPar;
+  int id, rank, par_id;
   unsigned char base;
   std::vector<int> in, in_weight, out, out_weight;
   std::vector<int> aligned_node;
@@ -12,8 +12,9 @@ struct node_t {
   node_t();
   node_t(int _id, unsigned char _base, int m) {
     base = _base;
-    id = isPar = _id;
-    aligned_node.resize(m);
+    id = par_id = _id;
+    aligned_node.resize(m, -1);
+    aligned_node[base] = id;
   }
   void add_in_adj(int seq_id, int from) {
     int ok = 0;

@@ -10,14 +10,14 @@
 
 2. make
    ```bash
-   cd MSA
+   cd POA
    cmake -S . -B build
    cmake --build build
    ```
 
 3. run
    ```bash
-   ./build/MSA ./test/mtDNA.fasta ./test/result.fasta 10
+   ./bin/POA -i ./data/mtDNA.fasta 
    ```
 
 4. clean
