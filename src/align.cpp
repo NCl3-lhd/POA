@@ -6,7 +6,7 @@ std::vector<res_t> POA(para_t* para, const graph& DAG, const std::string& seq) {
   int n = DAG.node.size(), m = seq.size();
   assert(seq[0] == para->m - 1);
   const std::vector<node_t>& node = DAG.node;const std::vector<int>& rank = DAG.rank;
-  std::vector<int> mat = para->mat; int para_m = para->m, o1 = para->gap_open1, e1 = para->gap_ext1;
+  std::vector<int> mat = para->mat; int para_m = para->m, e1 = para->gap_ext1, o1 = para->gap_open1 + e1;
   // std::cout << mat << " " << mis << " " << o1 << " " << e1 << "\n";
   std::vector<std::vector<int>> M(n, std::vector<int>(m + 1, -INF)), D(M), I(M);
   M[0][0] = 0;

@@ -55,12 +55,6 @@ int main(int argc, char** argv) {
     std::cerr << "error read file: " << e.what() << std::endl;
     return 1;
   }
-  for (auto it = seqs.begin(); it != seqs.end();) {
-    if (it->comment.find("HVS-II") != std::string::npos) {
-      it = seqs.erase(it);
-    }
-    else it++;
-  }
   // handle alignment 
   graph DAG;
   DAG.init(para->m, 0, seqs[0].seq);
