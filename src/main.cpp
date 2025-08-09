@@ -4,6 +4,8 @@
 #include "parameter.h"
 #include "graph.h"
 #include "align.h"
+#include <immintrin.h>
+#include "mem_alloc_utils.h"
 // #include "kband.h"
 
 // extern unsigned char nt4_table[256];
@@ -55,12 +57,14 @@ int main(int argc, char** argv) {
     std::cerr << "error read file: " << e.what() << std::endl;
     return 1;
   }
+  std::cerr << seqs.size() << "\n";
   // handle alignment 
   graph DAG;
   DAG.init(para->m, 0, seqs[0].seq);
   // seqs[0].seq = "TTGCCCTT";
   // seqs[1].seq = "CCAATTTT";
   // seqs[2].seq = "TGCT";
+  aligned_buff_t mpool;
   for (int i = 1; i < seqs.size(); i++) {  //seqs.size()
     std::cerr << i << "\n";
     std::string tseq;
@@ -69,7 +73,10 @@ int main(int argc, char** argv) {
       tseq += char26_table[seqs[i].seq[j]];
     }
     // std::cerr << "poa" << "\n";
-    std::vector<res_t> res = POA(para, DAG, tseq);
+    // POA_SIMD(para, DAG, tseq);
+    // std::vector<res_t> res = POA(para, DAG, tseq);
+    // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
+    std::vector<res_t> res = POA_SIMD(para, DAG, tseq, &mpool);
     // std::cerr << "add_path" << "\n";
     DAG.add_path(para->m, i, res);
     // std::cerr << "topsort" << "\n";
@@ -78,7 +85,6 @@ int main(int argc, char** argv) {
   }
   // handle output 
   DAG.output_rc_msa(seqs);
-
 
 
   // std::cout << "correct check" << "\n";

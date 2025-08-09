@@ -6,6 +6,9 @@ project(main)
 # 设置可执行文件的输出目录为项目根目录下的 bin 文件夹
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
+# # SIMD
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+
 # 1. 查找 zlib 包
 find_package(ZLIB REQUIRED)
 
