@@ -7,5 +7,5 @@
 #include "mem_alloc_utils.h"
 
 std::vector<res_t> POA(para_t* para, const graph& DAG, const std::string& seq);
-std::vector<res_t> POA_SIMD(para_t* para, const graph& DAG, const std::string& seq, aligned_buff_t* mpool = nullptr);
+std::vector<res_t> POA_SIMD(para_t* para, const graph& DAG, const std::string& _seq, aligned_buff_t* mpool = nullptr);
 #endif
