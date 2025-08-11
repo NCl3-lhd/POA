@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
     // POA_SIMD(para, DAG, tseq);
     // std::vector<res_t> res = POA(para, DAG, tseq);
     // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
-    std::vector<res_t> res = POA_SIMD(para, DAG, tseq, &mpool);
+    std::vector<res_t> res = POA_SIMD_ORIGIN(para, DAG, tseq, &mpool);
     // std::cerr << "add_path" << "\n";
     DAG.add_path(para->m, i, res);
     // std::cerr << "topsort" << "\n";
