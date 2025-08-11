@@ -217,7 +217,7 @@ std::vector<res_t> POA_SIMD_ORIGIN(para_t* para, const graph& DAG, const std::st
 
         int* M_p = M + p * col_size;
         // M[i][j] = std::max(M[i][j], M[p][j - 1] + mat[pre.base * para_m + seq[j - 1]]); // qsource
-        TMP = _mm256_loadu_si256((reg*)(M_p + j - reg_size)); //M[p][j - 1]
+        TMP = _mm256_load_si256((reg*)(M_p + j - reg_size)); //M[p][j - 1]
 
         mask = _mm256_cmpeq_epi32(PRE_BASE, SEQ);
         // pre.base == seq[j - 1] ? match : mismatch
@@ -247,13 +247,13 @@ std::vector<res_t> POA_SIMD_ORIGIN(para_t* para, const graph& DAG, const std::st
     I_i[0] = NEG_INF;
     for (int j = 1; j < reg_size; j++) {
       // I[i][j] = std::max(I[i][j - 1] + e1, M[i][j - 1] + o1)
-      I_i[j] = std::max(I_i[j - 1] + block_num * e1, M_i[offset + j - 1] + o1); // isource
+      I_i[j] = std::max(I_i[j - 1] + block_num * e1, M_i[j - 1 + offset] + o1); // isource
       M_i[j] = std::max({ M_i[j], D_i[j], I_i[j] });  // three source
     }
     for (int j = reg_size; j < col_size; j += reg_size) {
       // I[i][j] = std::max(I[i][j - 1] + e1, M[i][j - 1] + o1)
       reg TMP1 = _mm256_load_si256((reg*)(I_i + j - reg_size));
-      TMP1 = _mm256_add_epi32(TMP1, E1); // max(D[i][j], D[p][j] + e1)
+      TMP1 = _mm256_add_epi32(TMP1, E1);
       reg TMP2 = _mm256_load_si256((reg*)(M_i + j - reg_size));
       TMP2 = _mm256_add_epi32(TMP2, O1);
       _mm256_store_si256((reg*)(I_i + j), _mm256_max_epi32(TMP1, TMP2)); // I[i][j] = max
@@ -263,7 +263,27 @@ std::vector<res_t> POA_SIMD_ORIGIN(para_t* para, const graph& DAG, const std::st
       TMP1 = _mm256_load_si256((reg*)(D_i + j));
       TMP2 = _mm256_load_si256((reg*)(I_i + j));
       Mij = _mm256_max_epi32(Mij, _mm256_max_epi32(TMP1, TMP2));
-      _mm256_store_si256((reg*)(I_i + j), Mij); // M[i][j] = max
+      _mm256_store_si256((reg*)(M_i + j), Mij); // M[i][j] = max
+    }
+    // active f loop
+    I_i[1] = std::max(I_i[offset] + e1, M_i[offset] + o1); // isource
+    M_i[1] = std::max({ M_i[1], D_i[1], I_i[1] });  // three source
+    for (int j = 2; j < reg_size; j++) {
+      // I[i][j] = std::max(I[i][j - 1] + e1, M[i][j - 1] + o1)
+      I_i[j] = std::max(I_i[j], I_i[j - 1] + block_num * e1); // isource
+      M_i[j] = std::max(M_i[j], I_i[j]);  // three source
+    }
+    for (int j = reg_size; j < col_size; j += reg_size) {
+      // I[i][j] = std::max(I[i][j], I[i][j - 1] + e1)
+      reg Iij = _mm256_load_si256((reg*)(I_i + j));
+      reg TMP1 = _mm256_load_si256((reg*)(I_i + j - reg_size)); // I[i][j - 1]
+      TMP1 = _mm256_add_epi32(TMP1, E1); //I[i][j - 1] + e1
+      _mm256_store_si256((reg*)(I_i + j), _mm256_max_epi32(Iij, TMP1)); // I[i][j] = max
+
+      // M[i][j] = std::max(M[i][j], I[i][j]);  // three source
+      reg Mij = _mm256_load_si256((reg*)(M_i + j));
+      TMP1 = _mm256_load_si256((reg*)(I_i + j));
+      _mm256_store_si256((reg*)(M_i + j), _mm256_max_epi32(Mij, TMP1)); // M[i][j] = max
     }
     auto end3 = std::chrono::high_resolution_clock::now();
     total_part3 += std::chrono::duration_cast<std::chrono::microseconds>(end3 - start3);
@@ -295,9 +315,12 @@ std::vector<res_t> POA_SIMD_ORIGIN(para_t* para, const graph& DAG, const std::st
   int i = n - 1, j = (m % block_num) * reg_size + (m / block_num); // j = m
   std::cerr << M[i * col_size + j] << "\n";
   std::vector<res_t> res;
+  // return res;
   char op = 'M';
   // std::cerr << "finsh align" << "\n";
   while (i > 0 || j > 0) {
+    // std::cerr << "op: " << op << "\n";
+    // std::cerr << "i: " << i << "\n";
     // std::cerr << "j: " << j << "\n";
     int* M_i = M + i * col_size;
     int* D_i = D + i * col_size;
@@ -330,6 +353,22 @@ std::vector<res_t> POA_SIMD_ORIGIN(para_t* para, const graph& DAG, const std::st
           i = p, j -= reg_size;
           break;
         }
+        else if (M_i[j] == M_p[j - 1 + offset] + (pre.base == seq[j - 1 + offset] ? match : mismatch)) {
+          if (pre.base == seq[j - 1 + offset]) {
+            // std::cout << "M";
+            res.emplace_back(res_t(pre.id, pre.base));
+          }
+          else {
+            // std::cout << "X";
+            const node_t& par = node[pre.par_id]; // dsu.find par
+            if (par.aligned_node[seq[j - 1 + offset]] != -1) {
+              res.emplace_back(res_t(par.aligned_node[seq[j - 1 + offset]], seq[j - 1 + offset]));
+            }
+            else res.emplace_back(res_t(-1, seq[j - 1 + offset], pre.par_id));
+          }
+          i = p, j = j - 1 + offset;
+          break;
+        }
       }
       continue;
     }
@@ -347,14 +386,25 @@ std::vector<res_t> POA_SIMD_ORIGIN(para_t* para, const graph& DAG, const std::st
           continue;
         }
       }
+      else {
+        res.emplace_back(res_t(-1, seq[j - 1 + offset]));
+        if (I_i[j] == I_i[j - 1 + offset] + e1) {
+          j = j - 1 + offset;
+          continue;
+        }
+        if (I_i[j] == M_i[j - 1 + offset] + o1) {
+          op = 'M';
+          j = j - 1 + offset;
+          continue;
+        }
+      }
     }
     if (op == 'D') {
       const node_t& cur = node[rank[i]];
-      // std::cerr << M[i][j] << " " << D[i][j] << "\n";
       for (int k = 0; k < cur.in.size(); k++) {
         int p = node[cur.in[k]].rank; // rank
         const node_t& pre = node[cur.in[k]];
-        int* D_p = M + p * col_size;
+        int* D_p = D + p * col_size;
         int* M_p = M + p * col_size;
         if (D_i[j] == M_p[j] + o1) {
           op = 'M';
@@ -369,7 +419,7 @@ std::vector<res_t> POA_SIMD_ORIGIN(para_t* para, const graph& DAG, const std::st
       continue;
     }
   }
-  // std::cout << "sorce:" << M[n - 1][m] << "\n";
+  std::cerr << "finish:" << "\n";
   if (mpool == nullptr) free_aligned(buff);
   return res;
 }
@@ -494,25 +544,25 @@ std::vector<res_t> POA_SIMD(para_t* para, const graph& DAG, const std::string& _
   std::cerr << "部分1总耗时: " << total_part1.count() / 1000 << " ms\n";
   std::cerr << "部分2总耗时: " << total_part2.count() / 1000 << " ms\n";
   std::cerr << "部分3总耗时: " << total_part3.count() / 1000 << " ms\n";
-  // std::cout << M[(n - 1) * col_size + m] << "\n";
-  // std::cout << "M:\n";
-  // for (int i = 0; i < n; i++) {
-  //   for (int j = 0; j < col_size; j++) {
-  //     std::cout << M[i * col_size + j] << " \n"[j + 1 == col_size];
-  //   }
-  // }
-  // std::cout << "D:\n";
-  // for (int i = 0; i < n; i++) {
-  //   for (int j = 0; j < col_size; j++) {
-  //     std::cout << D[i * col_size + j] << " \n"[j + 1 == col_size];
-  //   }
-  // }
-  // std::cout << "I:\n";
-  // for (int i = 0; i < n; i++) {
-  //   for (int j = 0; j < col_size; j++) {
-  //     std::cout << I[i * col_size + j] << " \n"[j + 1 == col_size];
-  //   }
-  // }
+  std::cerr << M[(n - 1) * col_size + m] << "\n";
+  std::cout << "M:\n";
+  for (int i = 0; i < n; i++) {
+    for (int j = 0; j < col_size; j++) {
+      std::cout << M[i * col_size + j] << " \n"[j + 1 == col_size];
+    }
+  }
+  std::cout << "D:\n";
+  for (int i = 0; i < n; i++) {
+    for (int j = 0; j < col_size; j++) {
+      std::cout << D[i * col_size + j] << " \n"[j + 1 == col_size];
+    }
+  }
+  std::cout << "I:\n";
+  for (int i = 0; i < n; i++) {
+    for (int j = 0; j < col_size; j++) {
+      std::cout << I[i * col_size + j] << " \n"[j + 1 == col_size];
+    }
+  }
   // std::cerr << "finish" << "\n";
   int i = n - 1, j = m;
   std::vector<res_t> res;
@@ -520,6 +570,7 @@ std::vector<res_t> POA_SIMD(para_t* para, const graph& DAG, const std::string& _
   // std::cerr << "finsh align" << "\n";
   while (i > 0 || j > 0) {
     // dsource
+    std::cerr << op << " " << i << " " << j << "\n";
     if (op == 'M') {
       if (M[i * col_size + j] == D[i * col_size + j]) op = 'D';
       if (M[i * col_size + j] == I[i * col_size + j]) op = 'I';
