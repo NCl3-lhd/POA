@@ -84,14 +84,25 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res) {
   for (int i = 0; i < res.size(); i++) {
     int cur_id = res[i].from;
     if (cur_id < 0) {
-      cur_id = node.size();
-      node.emplace_back(node_t(cur_id, res[i].base, para_m));
       if (res[i].aligned_id >= 0) { // dsu.merge
-        node[res[i].aligned_id].aligned_node[res[i].base] = cur_id;
-        node[cur_id].par_id = res[i].aligned_id;
+        if (node[res[i].aligned_id].aligned_node[res[i].base] == -1) {
+          cur_id = node.size();
+          node.emplace_back(node_t(cur_id, res[i].base, para_m));
+          node[res[i].aligned_id].aligned_node[res[i].base] = cur_id;
+          node[cur_id].par_id = res[i].aligned_id;
+          add_adj(seq_id, cur_id, anchored_id);
+        }
+        else {
+          cur_id = node[res[i].aligned_id].aligned_node[res[i].base];
+          add_adj(seq_id, cur_id, anchored_id);
+        }
+      }
+      else {
+        cur_id = node.size();
+        node.emplace_back(node_t(cur_id, res[i].base, para_m));
+        add_adj(seq_id, cur_id, anchored_id);
       }
       // std::cout << cur_id << " " << char256_table[res[i].base] << "  " << anchored_id << "\n";
-      add_adj(seq_id, cur_id, anchored_id);
     }
     else {
       // std::cout << cur_id << " " << char256_table[res[i].base] << "  " << anchored_id << "\n";

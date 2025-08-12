@@ -21,8 +21,10 @@ int main(int argc, char** argv) {
     ("X,mismatch", "mismatch sorce", cxxopts::value<int>()->default_value("-4"))
     ("O,gap_open", "gap_open sorce", cxxopts::value<int>()->default_value("-4"))
     ("E,gap_ext", "gap_ext sorce", cxxopts::value<int>()->default_value("-2"))
+    ("t,thread", "thread number", cxxopts::value<int>()->default_value("0"))
     ("h,help", "Print usage")
     ;
+  int thread;
   std::string path;
   para_t* para = new para_t();
   try {
@@ -40,6 +42,7 @@ int main(int argc, char** argv) {
     para->mismatch = result["mismatch"].as<int>();
     para->gap_open1 = result["gap_open"].as<int>();
     para->gap_ext1 = result["gap_ext"].as<int>();
+    thread = result["thread"].as<int>();
   }
   catch (const cxxopts::exceptions::exception& e)
   {
@@ -64,27 +67,33 @@ int main(int argc, char** argv) {
   // seqs[0].seq = "TTGCCCTT";
   // seqs[1].seq = "CCAATTTT";
   // seqs[2].seq = "TGCT";
-  aligned_buff_t mpool;
-  for (int i = 1; i < seqs.size(); i++) {  //seqs.size()
-    std::cerr << i << "\n";
-    std::string tseq;
-    tseq += char26_table['N'];
-    for (int j = 0; j < seqs[i].seq.size(); j++) {
-      tseq += char26_table[seqs[i].seq[j]];
+  if (!thread) { // 
+    aligned_buff_t mpool;
+    for (int i = 1; i < seqs.size(); i++) {  //seqs.size()
+      std::cerr << i << "\n";
+      std::string tseq;
+      tseq += char26_table['N'];
+      for (int j = 0; j < seqs[i].seq.size(); j++) {
+        tseq += char26_table[seqs[i].seq[j]];
+      }
+      // std::cerr << "poa" << "\n";
+      // POA_SIMD(para, DAG, tseq);
+      // std::vector<res_t> res = POA(para, DAG, tseq);
+      // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
+      std::vector<res_t> res = POA_SIMD_ORIGIN(para, DAG, tseq, &mpool);
+      // std::cerr << "add_path" << "\n";
+      DAG.add_path(para->m, i, res);
+      // std::cerr << "topsort" << "\n";
+      DAG.topsort(i + 1 == seqs.size());
+      // std::cout << i << " " << DAG.rank.size() << "\n";
     }
-    // std::cerr << "poa" << "\n";
-    // POA_SIMD(para, DAG, tseq);
-    // std::vector<res_t> res = POA(para, DAG, tseq);
-    // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
-    std::vector<res_t> res = POA_SIMD_ORIGIN(para, DAG, tseq, &mpool);
-    // std::cerr << "add_path" << "\n";
-    DAG.add_path(para->m, i, res);
-    // std::cerr << "topsort" << "\n";
-    DAG.topsort(i + 1 == seqs.size());
-    // std::cout << i << " " << DAG.rank.size() << "\n";
+    // handle output 
+    DAG.output_rc_msa(seqs);
   }
-  // handle output 
-  DAG.output_rc_msa(seqs);
+  else {
+    
+  }
+
 
 
   // std::cout << "correct check" << "\n";
