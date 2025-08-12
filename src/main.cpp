@@ -110,19 +110,20 @@ int main(int argc, char** argv) {
           for (int j = 0; j < seq_i.size(); j++) {
             tseq += char26_table[seq_i[j]];
           }
-          std::vector<res_t> res = POA_SIMD_ORIGIN(para, DAG, tseq);
+          std::vector<res_t> res = POA_SIMD_ORIGIN(para, DAG, tseq, cur_mpool);
           return res;
         }));
       }
-      std::cerr << "add_path" << "\n";
+      // std::cerr << "add_path" << "\n";
       int seq_id = i;
+      std::vector<std::vector<res_t>> res;
       for (auto&& result : results) {
-        // result.get();
-        std::vector<res_t> res = result.get();
-        std::cerr << seq_id << " " << res.size() << "\n";
-        DAG->add_path(para->m, seq_id++, res);
+        res.emplace_back(result.get());
       }
-      std::cerr << "topsort:" << "\n";
+      for (int j = 0; j < res.size(); j++) {
+        DAG->add_path(para->m, i + j, res[j]);
+      }
+      // std::cerr << "topsort:" << "\n";
       DAG->topsort(i + thread >= seqs.size());
 
       // std::cerr << "poa" << "\n";

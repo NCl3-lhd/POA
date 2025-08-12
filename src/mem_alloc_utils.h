@@ -12,12 +12,12 @@ struct aligned_buff_t {
   void* buff;
   size_t buff_size;
   aligned_buff_t() {
-    std::cerr << "init" << '\n';
+    // std::cerr << "init" << '\n';
     buff = nullptr;
     buff_size = 1024;
   };
   ~aligned_buff_t() {
-    std::cerr << "free" << '\n';
+    // std::cerr << "free" << '\n';
     free_aligned(buff);
   }
   void alloc_aligned(void** mem_ptr, size_t alignment, size_t size) {

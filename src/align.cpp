@@ -311,7 +311,7 @@ std::vector<res_t> POA_SIMD_ORIGIN(const para_t* para, const graph* DAG, const s
   //     std::cout << I[i * col_size + j] << " \n"[j + 1 == col_size];
   //   }
   // }
-  std::cerr << "finish dp" << "\n";
+  // std::cerr << "finish dp" << "\n";
   int i = n - 1, j = (m % block_num) * reg_size + (m / block_num); // j = m
   std::cerr << M[i * col_size + j] << "\n";
   std::vector<res_t> res;
@@ -419,7 +419,7 @@ std::vector<res_t> POA_SIMD_ORIGIN(const para_t* para, const graph* DAG, const s
       continue;
     }
   }
-  std::cerr << "finish POA:" << "\n";
+  // std::cerr << "finish POA:" << "\n";
   if (mpool == nullptr) free_aligned(buff);
   return res;
 }
