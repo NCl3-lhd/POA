@@ -81,11 +81,13 @@ void graph::init(int para_m, int seq_id, const std::string& str) {
 }
 void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res) {
   int anchored_id = 1; // sink
+  std::cerr << seq_id << " " << res.size() << "\n";
   for (int i = 0; i < res.size(); i++) {
     int cur_id = res[i].from;
     if (cur_id < 0) {
       if (res[i].aligned_id >= 0) { // dsu.merge
         if (node[res[i].aligned_id].aligned_node[res[i].base] == -1) {
+          std::cerr << 1 << "\n";
           cur_id = node.size();
           node.emplace_back(node_t(cur_id, res[i].base, para_m));
           node[res[i].aligned_id].aligned_node[res[i].base] = cur_id;
@@ -93,11 +95,13 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res) {
           add_adj(seq_id, cur_id, anchored_id);
         }
         else {
+          std::cerr << 2 << "\n";
           cur_id = node[res[i].aligned_id].aligned_node[res[i].base];
           add_adj(seq_id, cur_id, anchored_id);
         }
       }
       else {
+        std::cerr << 3 << "\n";
         cur_id = node.size();
         node.emplace_back(node_t(cur_id, res[i].base, para_m));
         add_adj(seq_id, cur_id, anchored_id);
@@ -105,12 +109,14 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res) {
       // std::cout << cur_id << " " << char256_table[res[i].base] << "  " << anchored_id << "\n";
     }
     else {
+      std::cerr << 4 << "\n";
+      std::cerr << node.size() << " " << cur_id << " " << anchored_id << "\n";
       // std::cout << cur_id << " " << char256_table[res[i].base] << "  " << anchored_id << "\n";
       add_adj(seq_id, cur_id, anchored_id);
     }
     anchored_id = cur_id;
   }
-  // std::cout << "finish add path" << "\n";
+  std::cerr << "finish add path" << "\n";
 }
 
 void graph::output_rc_msa(const std::vector<seq_t>& seqs) {

@@ -6,6 +6,7 @@
 #include "align.h"
 #include <immintrin.h>
 #include "mem_alloc_utils.h"
+#include "ThreadPool.h"
 // #include "kband.h"
 
 // extern unsigned char nt4_table[256];
@@ -62,8 +63,8 @@ int main(int argc, char** argv) {
   }
   std::cerr << seqs.size() << "\n";
   // handle alignment 
-  graph DAG;
-  DAG.init(para->m, 0, seqs[0].seq);
+  graph* DAG = new graph();
+  DAG->init(para->m, 0, seqs[0].seq);
   // seqs[0].seq = "TTGCCCTT";
   // seqs[1].seq = "CCAATTTT";
   // seqs[2].seq = "TGCT";
@@ -82,16 +83,58 @@ int main(int argc, char** argv) {
       // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
       std::vector<res_t> res = POA_SIMD_ORIGIN(para, DAG, tseq, &mpool);
       // std::cerr << "add_path" << "\n";
-      DAG.add_path(para->m, i, res);
+      DAG->add_path(para->m, i, res);
       // std::cerr << "topsort" << "\n";
-      DAG.topsort(i + 1 == seqs.size());
-      // std::cout << i << " " << DAG.rank.size() << "\n";
+      DAG->topsort(i + 1 == seqs.size());
+      // std::cout << i << " " << DAG->rank.size() << "\n";
     }
     // handle output 
-    DAG.output_rc_msa(seqs);
+    DAG->output_rc_msa(seqs);
   }
   else {
-    
+    ThreadPool pool(thread);
+    aligned_buff_t* mpool = new aligned_buff_t[thread];
+    std::cerr << "thread:" << thread << "\n";
+    std::vector<std::future<std::vector<res_t>> > results;
+    for (int i = 1; i < seqs.size(); i += thread) {  //seqs.size()
+      results.clear();
+      for (int j = 0; j < thread && i + j < seqs.size(); j++) {
+        std::cerr << "i:" << i + j << "\n";
+        // const char* seq_i = seqs[i].seq.c_str();
+        const std::string& seq_i = seqs[i + j].seq;
+        aligned_buff_t* cur_mpool = &mpool[j];
+        results.emplace_back(
+          pool.enqueue([para, DAG, &seq_i, cur_mpool] {
+          std::string tseq;
+          tseq += char26_table['N'];
+          for (int j = 0; j < seq_i.size(); j++) {
+            tseq += char26_table[seq_i[j]];
+          }
+          std::vector<res_t> res = POA_SIMD_ORIGIN(para, DAG, tseq);
+          return res;
+        }));
+      }
+      std::cerr << "add_path" << "\n";
+      int seq_id = i;
+      for (auto&& result : results) {
+        // result.get();
+        std::vector<res_t> res = result.get();
+        std::cerr << seq_id << " " << res.size() << "\n";
+        DAG->add_path(para->m, seq_id++, res);
+      }
+      std::cerr << "topsort:" << "\n";
+      DAG->topsort(i + thread >= seqs.size());
+
+      // std::cerr << "poa" << "\n";
+      // POA_SIMD(para, DAG, tseq);
+      // std::vector<res_t> res = POA(para, DAG, tseq);
+      // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
+      // std::cerr << "topsort" << "\n";
+      // std::cout << i << " " << DAG->rank.size() << "\n";
+    }
+    // handle output 
+    DAG->output_rc_msa(seqs);
+    delete[] mpool;
   }
 
 
@@ -109,6 +152,7 @@ int main(int argc, char** argv) {
   // std::cout << PSA_Kband(s4, seqs[2].seq, nullptr, nullptr) << "\n";
   // delete
   delete para;
+  delete DAG;
   para = nullptr;  // 防止后续误用
   return 0;
 }

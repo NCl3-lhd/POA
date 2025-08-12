@@ -138,15 +138,15 @@ std::vector<res_t> POA(para_t* para, const graph& DAG, const std::string& seq) {
   return res;
 };
 
-std::vector<res_t> POA_SIMD_ORIGIN(para_t* para, const graph& DAG, const std::string& _seq, aligned_buff_t* mpool) {
+std::vector<res_t> POA_SIMD_ORIGIN(const para_t* para, const graph* DAG, const std::string& _seq, aligned_buff_t* mpool) {
   std::chrono::microseconds total_part1(0);
   std::chrono::microseconds total_part2(0);
   std::chrono::microseconds total_part3(0);
   auto start1 = std::chrono::high_resolution_clock::now();
 
-  int n = DAG.node.size(), m = _seq.size();
+  int n = DAG->node.size(), m = _seq.size();
   assert(_seq[0] == para->m - 1);
-  const std::vector<node_t>& node = DAG.node;const std::vector<int>& rank = DAG.rank;
+  const std::vector<node_t>& node = DAG->node;const std::vector<int>& rank = DAG->rank;
   std::vector<int> mat = para->mat;
   int match = para->match, mismatch = para->mismatch, para_m = para->m, e1 = para->gap_ext1, o1 = para->gap_open1 + e1;
   reg MATCH = _mm256_set1_epi32(match), MISMATCH = _mm256_set1_epi32(mismatch), E1 = _mm256_set1_epi32(e1), O1 = _mm256_set1_epi32(o1), Neg_inf = _mm256_set1_epi32(NEG_INF);
@@ -311,7 +311,7 @@ std::vector<res_t> POA_SIMD_ORIGIN(para_t* para, const graph& DAG, const std::st
   //     std::cout << I[i * col_size + j] << " \n"[j + 1 == col_size];
   //   }
   // }
-  // std::cerr << "finish" << "\n";
+  std::cerr << "finish dp" << "\n";
   int i = n - 1, j = (m % block_num) * reg_size + (m / block_num); // j = m
   std::cerr << M[i * col_size + j] << "\n";
   std::vector<res_t> res;
@@ -419,7 +419,7 @@ std::vector<res_t> POA_SIMD_ORIGIN(para_t* para, const graph& DAG, const std::st
       continue;
     }
   }
-  std::cerr << "finish:" << "\n";
+  std::cerr << "finish POA:" << "\n";
   if (mpool == nullptr) free_aligned(buff);
   return res;
 }
