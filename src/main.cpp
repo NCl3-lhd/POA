@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
       // POA_SIMD(para, DAG, tseq);
       // std::vector<res_t> res = POA(para, DAG, tseq);
       // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
-      std::vector<res_t> res = POA_SIMD_ORIGIN(para, DAG, tseq, &mpool[0]);
+      std::vector<res_t> res = abPOA(para, DAG, tseq, &mpool[0]);
       // std::cerr << "add_path" << "\n";
       DAG->add_path(para->m, i, res);
       // std::cerr << "topsort" << "\n";
@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
           for (int j = 0; j < seq_i.size(); j++) {
             tseq += char26_table[seq_i[j]];
           }
-          std::vector<res_t> res = POA_SIMD_ORIGIN(para, DAG, tseq, cur_mpool);
+          std::vector<res_t> res = abPOA(para, DAG, tseq, cur_mpool);
           return res;
         }));
       }
@@ -153,6 +153,7 @@ int main(int argc, char** argv) {
       // std::cout << i << " " << DAG->rank.size() << "\n";
     }
     // handle output 
+    // std::cerr << "output" << '\n';
     DAG->output_rc_msa(seqs);
     delete[] mpool;
   }
@@ -172,7 +173,8 @@ int main(int argc, char** argv) {
   // std::cout << PSA_Kband(s4, seqs[2].seq, nullptr, nullptr) << "\n";
   // delete
   delete para;
-  delete DAG;
   para = nullptr;  // 防止后续误用
+  delete DAG;
+  DAG = nullptr;  // 防止后续误用
   return 0;
 }

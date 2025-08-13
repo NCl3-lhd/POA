@@ -102,11 +102,12 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
       }
       else {
         // std::cerr << 3 << "\n";
-        if (graph_node_num) {
+        if (graph_node_num > 0) {
           for (int k = 0; k < node[anchored_id].in.size(); k++) {
             int v = node[anchored_id].in[k];
-            if (node[v].base == res[i].base && v >= graph_node_num) {
+            if (node[v].base == res[i].base && v >= graph_node_num && node[v].par_id == v) {
               cur_id = v;
+              break;
             }
           }
           // for (int k = 0; k < node[anchored_id].in.size(); k++) {
@@ -136,7 +137,7 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
 }
 
 void graph::output_rc_msa(const std::vector<seq_t>& seqs) {
-  // std::cout << seqs.size() << " " << rank.size() << "\n";
+  // std::cerr << seqs.size() << " " << rank.size() << "\n";
   std::vector<std::string> res(seqs.size(), std::string(rank.size() - 2, '-'));
   for (int i = 0; i < node.size(); i++) {
     int rank = node[node[i].par_id].rank;
