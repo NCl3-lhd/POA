@@ -61,6 +61,7 @@ int main(int argc, char** argv) {
     std::cerr << "error read file: " << e.what() << std::endl;
     return 1;
   }
+  // seqs.resize(3);
   std::cerr << seqs.size() << "\n";
   // handle alignment 
   graph* DAG = new graph();
@@ -96,7 +97,24 @@ int main(int argc, char** argv) {
     aligned_buff_t* mpool = new aligned_buff_t[thread];
     std::cerr << "thread:" << thread << "\n";
     std::vector<std::future<std::vector<res_t>> > results;
-    for (int i = 1; i < seqs.size(); i += thread) {  //seqs.size()
+    int sample_num = (int(seqs.size()) - 1) / (thread + 1);
+    for (int i = 1; i < seqs.size() && i <= sample_num; i++) { // ensure parallel before DAG have the enough sample seq
+      std::string tseq;
+      tseq += char26_table['N'];
+      for (int j = 0; j < seqs[i].seq.size(); j++) {
+        tseq += char26_table[seqs[i].seq[j]];
+      }
+      // std::cerr << "poa" << "\n";
+      // POA_SIMD(para, DAG, tseq);
+      // std::vector<res_t> res = POA(para, DAG, tseq);
+      // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
+      std::vector<res_t> res = POA_SIMD_ORIGIN(para, DAG, tseq, &mpool[0]);
+      // std::cerr << "add_path" << "\n";
+      DAG->add_path(para->m, i, res);
+      // std::cerr << "topsort" << "\n";
+      DAG->topsort(i + 1 == seqs.size());
+    }
+    for (int i = sample_num + 1; i < seqs.size(); i += thread) {  //seqs.size()
       results.clear();
       for (int j = 0; j < thread && i + j < seqs.size(); j++) {
         std::cerr << "i:" << i + j << "\n";
@@ -120,8 +138,9 @@ int main(int argc, char** argv) {
       for (auto&& result : results) {
         res.emplace_back(result.get());
       }
+      int node_num = DAG->node.size();
       for (int j = 0; j < res.size(); j++) {
-        DAG->add_path(para->m, i + j, res[j]);
+        DAG->add_path(para->m, i + j, res[j], node_num);
       }
       // std::cerr << "topsort:" << "\n";
       DAG->topsort(i + thread >= seqs.size());

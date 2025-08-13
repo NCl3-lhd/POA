@@ -79,7 +79,7 @@ void graph::init(int para_m, int seq_id, const std::string& str) {
   add_adj(seq_id, pre_id, 1); // 
   topsort(0);
 }
-void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res) {
+void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int graph_node_num) {
   int anchored_id = 1; // sink
   // std::cerr << seq_id << " " << res.size() << "\n";
   for (int i = 0; i < res.size(); i++) {
@@ -102,8 +102,24 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res) {
       }
       else {
         // std::cerr << 3 << "\n";
-        cur_id = node.size();
-        node.emplace_back(node_t(cur_id, res[i].base, para_m));
+        if (graph_node_num) {
+          for (int k = 0; k < node[anchored_id].in.size(); k++) {
+            int v = node[anchored_id].in[k];
+            if (node[v].base == res[i].base && v >= graph_node_num) {
+              cur_id = v;
+            }
+          }
+          // for (int k = 0; k < node[anchored_id].in.size(); k++) {
+          //   int v = node[anchored_id].in[k];
+          //   if ((node[v].base ^ 2) == res[i].base && v >= graph_node_num) {
+          //     cur_id = v;
+          //   }
+          // }
+        }
+        if (cur_id < 0) {
+          cur_id = node.size();
+          node.emplace_back(node_t(cur_id, res[i].base, para_m));
+        }
         add_adj(seq_id, cur_id, anchored_id);
       }
       // std::cout << cur_id << " " << char256_table[res[i].base] << "  " << anchored_id << "\n";
