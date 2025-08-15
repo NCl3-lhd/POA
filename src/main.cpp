@@ -7,6 +7,7 @@
 #include <immintrin.h>
 #include "mem_alloc_utils.h"
 #include "ThreadPool.h"
+#include <algorithm>
 // #include "kband.h"
 
 // extern unsigned char nt4_table[256];
@@ -23,6 +24,8 @@ int main(int argc, char** argv) {
     ("O,gap_open", "gap_open sorce", cxxopts::value<int>()->default_value("-4"))
     ("E,gap_ext", "gap_ext sorce", cxxopts::value<int>()->default_value("-2"))
     ("t,thread", "thread number", cxxopts::value<int>()->default_value("0"))
+    ("b,band_b", "band arg", cxxopts::value<int>()->default_value("50"))
+    ("f,band_f", "band arg", cxxopts::value<int>()->default_value("100"))
     ("h,help", "Print usage")
     ;
   int thread;
@@ -43,6 +46,8 @@ int main(int argc, char** argv) {
     para->mismatch = result["mismatch"].as<int>();
     para->gap_open1 = result["gap_open"].as<int>();
     para->gap_ext1 = result["gap_ext"].as<int>();
+    para->b = result["band_b"].as<int>();
+    para->f = result["band_f"].as<int>();
     thread = result["thread"].as<int>();
   }
   catch (const cxxopts::exceptions::exception& e)
@@ -61,17 +66,22 @@ int main(int argc, char** argv) {
     std::cerr << "error read file: " << e.what() << std::endl;
     return 1;
   }
-  // seqs.resize(3);
+  size_t minl = 10000000, maxl = 0;
+  // seqs.resize(53);
   std::cerr << seqs.size() << "\n";
   // handle alignment 
   graph* DAG = new graph();
   DAG->init(para->m, 0, seqs[0].seq);
+  minl = std::min(minl, seqs[0].seq.size());
+  maxl = std::max(maxl, seqs[0].seq.size());
   // seqs[0].seq = "TTGCCCTT";
   // seqs[1].seq = "CCAATTTT";
   // seqs[2].seq = "TGCT";
   if (!thread) { // 
     aligned_buff_t mpool;
     for (int i = 1; i < seqs.size(); i++) {  //seqs.size()
+      minl = std::min(minl, seqs[i].seq.size());
+      maxl = std::max(maxl, seqs[i].seq.size());
       std::cerr << i << "\n";
       std::string tseq;
       tseq += char26_table['N'];
@@ -82,7 +92,8 @@ int main(int argc, char** argv) {
       // POA_SIMD(para, DAG, tseq);
       // std::vector<res_t> res = POA(para, DAG, tseq);
       // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
-      std::vector<res_t> res = POA_SIMD_ORIGIN(para, DAG, tseq, &mpool);
+      std::vector<res_t> res = abPOA(para, DAG, tseq, &mpool);
+      // return 0;
       // std::cerr << "add_path" << "\n";
       DAG->add_path(para->m, i, res);
       // std::cerr << "topsort" << "\n";
@@ -91,6 +102,7 @@ int main(int argc, char** argv) {
     }
     // handle output 
     DAG->output_rc_msa(seqs);
+    std::cerr << minl << " " << maxl << '\n';
   }
   else {
     ThreadPool pool(thread);
@@ -98,17 +110,19 @@ int main(int argc, char** argv) {
     std::cerr << "thread:" << thread << "\n";
     std::vector<std::future<std::vector<res_t>> > results;
     int sample_num = (int(seqs.size()) - 1) / (thread + 1);
+    // sample_num = 0;
     for (int i = 1; i < seqs.size() && i <= sample_num; i++) { // ensure parallel before DAG have the enough sample seq
       std::string tseq;
       tseq += char26_table['N'];
       for (int j = 0; j < seqs[i].seq.size(); j++) {
         tseq += char26_table[seqs[i].seq[j]];
       }
-      // std::cerr << "poa" << "\n";
+      std::cerr << "poa" << "\n";
       // POA_SIMD(para, DAG, tseq);
       // std::vector<res_t> res = POA(para, DAG, tseq);
       // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
       std::vector<res_t> res = abPOA(para, DAG, tseq, &mpool[0]);
+      return 0;
       // std::cerr << "add_path" << "\n";
       DAG->add_path(para->m, i, res);
       // std::cerr << "topsort" << "\n";
@@ -155,7 +169,9 @@ int main(int argc, char** argv) {
     // handle output 
     // std::cerr << "output" << '\n';
     DAG->output_rc_msa(seqs);
+    std::cerr << "delete" << "\n";
     delete[] mpool;
+    std::cerr << "finish" << "\n";
   }
 
 

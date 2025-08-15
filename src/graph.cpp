@@ -63,6 +63,43 @@ void graph::topsort(int op) { // if op == 1, is not normal topsort, the node_id 
       }
     }
   }
+  std::cerr << "1111" << "\n";
+  hlen.resize(node.size());
+  for (int i = 0; i < rank.size(); i++) { // ni topsort id dp
+    int u = rank[i];
+    const node_t& cur = node[u];
+    int wmax = -1, max_pre = -1;
+    for (int k = 0; k < cur.in.size(); k++) {
+      int v = cur.in[k];
+      int pre = node[v].rank;
+      if (cur.in_weight[k] > wmax) {
+        wmax = cur.in_weight[k];
+        max_pre = pre;
+      }
+    }
+    if (max_pre != -1) hlen[cur.rank] = hlen[max_pre] + 1;
+    // std::cerr << u << " " << lp[i] << " " << rp[i] << "\n";
+  }
+
+  tlen.resize(node.size());
+  tlen[node[1].rank] = 1;
+  for (int i = int(rank.size()) - 1; i >= 0; i--) { // ni topsort id dp
+    int u = rank[i];
+    const node_t& cur = node[u];
+    int wmax = -1, max_suc = -1;
+    for (int k = 0; k < cur.out.size(); k++) {
+      int v = cur.out[k];
+      int suc = node[v].rank;
+      if (cur.out_weight[k] > wmax) {
+        wmax = cur.out_weight[k];
+        max_suc = suc;
+      }
+    }
+    if (max_suc != -1) tlen[cur.rank] = tlen[max_suc] + 1;
+
+    // std::cerr << u << " " << lp[i] << " " << rp[i] << "\n";
+  }
+  // lp[node[0].rank] = 0; // src lp = 0
 }
 void graph::init(int para_m, int seq_id, const std::string& str) {
   // 清空现有数据
@@ -149,4 +186,44 @@ void graph::output_rc_msa(const std::vector<seq_t>& seqs) {
     std::cout << ">" << seqs[i].name << " " << seqs[i].comment << "\n";
     std::cout << res[i] << "\n";
   }
+}
+std::vector<int> graph::calculateR() const {
+  std::queue<int> q;
+  std::vector<int> deg(node.size());
+  std::vector<int> R(node.size());  // index is rank
+  for (int i = 0; i < node.size(); i++) {
+    R[i] = 0;
+    deg[i] = node[i].out.size();
+  }
+  q.push(1);  // sink
+  while (q.size()) {
+    int u = q.front();
+    q.pop();
+    const node_t& cur = node[u];
+    if (u == 1) {
+      R[cur.rank] = -1;
+    }
+    else {
+      int wmax = -1, max_suc = -1;
+      for (int k = 0; k < cur.out.size(); k++) {
+        int v = cur.out[k];
+        int suc = node[v].rank;
+        if (cur.out_weight[k] > wmax) {
+          wmax = cur.out_weight[k];
+          max_suc = suc;
+        }
+      }
+      R[cur.rank] = R[max_suc] + 1;
+    }
+    if (u == 0) {
+      break;
+    }
+    for (int k = 0; k < cur.in.size(); k++) {
+      int v = node[u].in[k];
+      if (--deg[v] == 0) {
+        q.push(v);
+      }
+    }
+  }
+  return R;
 }

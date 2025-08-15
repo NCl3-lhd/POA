@@ -169,18 +169,58 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const std::string
   int* M = (int*)buff;
   int* D = M + mtx_size;
   int* I = D + mtx_size;
-  memset(M, 0xc0, col_size * sizeof(int));//M[0] = NEG_INF
-  memset(D, 0xc0, col_size * sizeof(int));//D[0] = NEG_INF
+  std::vector<int> Ms(n, m + 1), Me(n); // index is rank
+  std::vector<int> Bs(n), Be(n);  // indes is rank
+  const int w = para->b + m / para->f;
+  // std::cerr << "n:" << n << " " << w << "\n";
+  std::vector<int> R = DAG->calculateR(); // index is rank
+  // std::cerr << "R:" << node[1].rank << " " << R[29650] << "\n";
+  Ms[0] = Me[0] = 0;
+  Bs[0] = std::max(0, std::min(Ms[0], m - R[0]) - w), Be[0] = std::min(m, std::max(Me[0], m - R[0]) + w); // [Bs,Be]
+  int tbs = std::max(0, std::min(DAG->hlen[0], m - DAG->tlen[0]) - w), tbe = std::min(m, std::max(DAG->hlen[0], m - DAG->tlen[0]) + w);
+  Bs[0] = tbs, Be[0] = tbe;
+
+  // return std::vector<res_t>();
+  int block_s = Bs[0] / reg_size, block_e = Be[0] / reg_size + 1; // [block_s,block_e)
+  for (int bid = block_s; bid < block_e; bid++) {
+    // memset(M, 0xc0, col_size * sizeof(int));//M[0] = NEG_INF
+    // memset(D, 0xc0, col_size * sizeof(int));//D[0] = NEG_INF
+    int* M_i = M + 0 * col_size;
+    int* D_i = D + 0 * col_size;
+    _mm256_store_si256((reg*)(M_i + bid * reg_size), Neg_inf);
+    _mm256_store_si256((reg*)(D_i + bid * reg_size), Neg_inf);
+  }
+  if (block_s - 1 >= 0) _mm256_store_si256((reg*)(M + (block_s - 1) * reg_size), Neg_inf);
+  if (block_e < col_size / reg_size) _mm256_store_si256((reg*)(M + block_e * reg_size), Neg_inf);
+  // memset(M, 0xc0, col_size * sizeof(int));//M[0] = NEG_INF
+  // memset(D, 0xc0, col_size * sizeof(int));//D[0] = NEG_INF
   // memset(buff, 0xc0, 3 * mtx_size * sizeof(int)); // 初始化为-INF 0xc0c0c0c0
   M[0 * col_size + 0] = 0;
+  for (int k = 0; k < node[0].out.size(); k++) {
+    int suc = node[node[0].out[k]].rank;
+    Ms[suc] = std::min(Ms[suc], 0 + 1), Me[suc] = std::max(Me[suc], 0 + 1);
+  }
   auto end1 = std::chrono::high_resolution_clock::now();
   total_part1 += std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
   int tot = 0;
+  size_t sum = tbe - tbs + 1;
+  std::cerr << "node:" << node.size() << "\n";
+  std::cerr << "path len:" << DAG->hlen[node[1].rank] << " " << DAG->tlen[node[0].rank] << "\n";
+  std::cerr << "m:" << m << "\n";
   for (int i = 1; i < n; i++) {
     const node_t& cur = node[rank[i]];
     int* M_i = M + i * col_size;
     int* D_i = D + i * col_size;
     tot += cur.in.size();
+    Bs[i] = std::max(0, std::min(Ms[i], m - R[i]) - w), Be[i] = std::min(m, std::max(Me[i], m - R[i]) + w); // [Bs,Be]
+    int tbs = std::max(0, std::min(DAG->hlen[i], m - DAG->tlen[i]) - w), tbe = std::min(m, std::max(DAG->hlen[i], m - DAG->tlen[i]) + w);
+    Bs[i] = tbs, Be[i] = tbe;
+
+    // int tbs = std::max(0, std::min(DAG->hmin[i], m - DAG->tmax[i]) - w), tbe = std::min(m, std::max(DAG->hmax[i], m - DAG->tmin[i]) + w);
+    // std::cerr << m << " " << Bs[i] << " " << Be[i] << "\n";
+    block_s = Bs[i] / reg_size, block_e = Be[i] / reg_size + 1; // [block_s,block_e)
+    sum += tbe - tbs + 1;
+    // std::cerr << "B:" << m << " " << w << " " << tbs << " " << tbe << '\n';
     auto start2 = std::chrono::high_resolution_clock::now();
     for (int k = 0; k < cur.in.size(); k++) {
       int p = node[cur.in[k]].rank; // rank
@@ -188,80 +228,108 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const std::string
       reg PRE_BASE = _mm256_set1_epi32(pre.base);
       int prev = NEG_INF;
       char prech = char26_table['N'];
-      for (int j = 0; j < col_size; j += reg_size) { // SIMD
+      int* M_p = M + p * col_size;
+      int* D_p = D + p * col_size;
+      for (int bid = block_s; bid < block_e; bid++) { // SIMD
+        int j = bid * reg_size;
         reg Mij = k == 0 ? Neg_inf : _mm256_load_si256((reg*)(M_i + j));
         reg Dij = k == 0 ? Neg_inf : _mm256_load_si256((reg*)(D_i + j));
         reg SEQ; // seq[j - 1]
-        if (j == 0) { // 特殊处理 j=0 的情况
-          alignas(32) int tmp[8] = { prech,seq[0], seq[1], seq[2],seq[3], seq[4], seq[5], seq[6] };
-          SEQ = _mm256_load_si256((reg*)tmp);
+        if (!((std::max(0, bid - 1) < (Bs[pre.rank] / reg_size)) || (bid > (Be[pre.rank] / reg_size)))) { //Bs[pre.rank] <= j - 1 && j <= Be[pre.rank]
+          // std::cerr << "debug: " << bid << " " << Bs[pre.rank] / reg_size << " " << Be[pre.rank] / reg_size << "\n";
+          if (j == 0) { // 特殊处理 j=0 的情况
+            alignas(32) int tmp[8] = { prech,seq[0], seq[1], seq[2],seq[3], seq[4], seq[5], seq[6] };
+            SEQ = _mm256_load_si256((reg*)tmp);
+          }
+          else {  // 直接加载连续内存 (高效)
+            const __m128i seq_chunk = _mm_loadu_si128((const __m128i*)(seq.c_str() + j - 1));
+            SEQ = _mm256_cvtepi8_epi32(seq_chunk);  // 符号扩展到32位
+          }
+
+          // M[i][j] = std::max(M[i][j], M[p][j - 1] + mat[pre.base * para_m + seq[j - 1]]); // qsource
+          reg TMP = prev == NEG_INF ? _mm256_setr_epi32(prev, M_p[j], M_p[j + 1], M_p[j + 2], M_p[j + 3], M_p[j + 4], M_p[j + 5], M_p[j + 6]) : _mm256_loadu_si256((reg*)(M_p + j - 1)); //M[p][j - 1]
+
+          reg mask = _mm256_cmpeq_epi32(PRE_BASE, SEQ);
+          // pre.base == seq[j - 1] ? match : mismatch
+          TMP = _mm256_add_epi32(TMP, _mm256_blendv_epi8(MISMATCH, MATCH, mask));
+          Mij = _mm256_max_epi32(Mij, TMP); //std::max(M[i][j], M[p][j - 1] + mat[pre.base * para_m + seq[j - 1]]); 
         }
-        else {  // 直接加载连续内存 (高效)
-          const __m128i seq_chunk = _mm_loadu_si128((const __m128i*)(seq.c_str() + j - 1));
-          SEQ = _mm256_cvtepi8_epi32(seq_chunk);  // 符号扩展到32位
+        if (Bs[pre.rank] <= j && j <= Be[pre.rank]) { // Bs[pre.rank] <= j && j <= Be[pre.rank]
+          // D[i][j] = std::max({ D[i][j], D[p][j] + e1, M[p][j] + o1 });    // dsource
+          reg TMP = _mm256_load_si256((reg*)(D_p + j));
+          Dij = _mm256_max_epi32(Dij, _mm256_add_epi32(TMP, E1)); // max(D[i][j], D[p][j] + e1)
+          TMP = _mm256_load_si256((reg*)(M_p + j));
+          Dij = _mm256_max_epi32(Dij, _mm256_add_epi32(TMP, O1)); // max(D[i][j], M[p][j] + o1)
         }
-
-        int* M_p = M + p * col_size;
-        int* D_p = D + p * col_size;
-        // M[i][j] = std::max(M[i][j], M[p][j - 1] + mat[pre.base * para_m + seq[j - 1]]); // qsource
-        reg TMP = j == 0 ? _mm256_setr_epi32(prev, M_p[j], M_p[j + 1], M_p[j + 2], M_p[j + 3], M_p[j + 4], M_p[j + 5], M_p[j + 6]) : _mm256_loadu_si256((reg*)(M_p + j - 1)); //M[p][j - 1]
-
-        reg mask = _mm256_cmpeq_epi32(PRE_BASE, SEQ);
-        // pre.base == seq[j - 1] ? match : mismatch
-        TMP = _mm256_add_epi32(TMP, _mm256_blendv_epi8(MISMATCH, MATCH, mask));
-        Mij = _mm256_max_epi32(Mij, TMP); //std::max(M[i][j], M[p][j - 1] + mat[pre.base * para_m + seq[j - 1]]); 
-
-        // D[i][j] = std::max({ D[i][j], D[p][j] + e1, M[p][j] + o1 });    // dsource
-        TMP = _mm256_load_si256((reg*)(D_p + j));
-        Dij = _mm256_max_epi32(Dij, _mm256_add_epi32(TMP, E1)); // max(D[i][j], D[p][j] + e1)
-        TMP = _mm256_load_si256((reg*)(M_p + j));
-        Dij = _mm256_max_epi32(Dij, _mm256_add_epi32(TMP, O1)); // max(D[i][j], M[p][j] + o1)
-
         _mm256_store_si256((reg*)(M_i + j), Mij); // M[i][j] = max
         _mm256_store_si256((reg*)(D_i + j), Dij); // D[i][j] = max
         prev = M_p[j + reg_size - 1]; // pre = M[p][j +reg_size - 1]
         prech = seq[j + reg_size - 1];// prech =seq[j + reg_size - 1]
+
       }
     }
-    // if (i % 100 == 0) std::cout << i << "\n";
+    if (block_s - 1 >= 0) _mm256_store_si256((reg*)(M_i + (block_s - 1) * reg_size), Neg_inf);
+    if (block_e < col_size / reg_size) _mm256_store_si256((reg*)(M_i + block_e * reg_size), Neg_inf);
 
+    // if (i % 100 == 0) std::cout << i << "\n";
     auto end2 = std::chrono::high_resolution_clock::now();
     total_part2 += std::chrono::duration_cast<std::chrono::microseconds>(end2 - start2);
     auto start3 = std::chrono::high_resolution_clock::now();
     // I[i][0] = NEG_INF;
     int* I_i = I + i * col_size;
-    I_i[0] = NEG_INF;
-    for (int j = 1; j <= m; j++) {
+    I_i[std::max(1, block_s * reg_size) - 1] = M_i[std::max(1, block_s * reg_size) - 1] = NEG_INF;
+    int max_pos = -1;
+    for (int j = std::max(1, block_s * reg_size); j < block_e * reg_size; j++) {
       I_i[j] = std::max(I_i[j - 1] + e1, M_i[j - 1] + o1); // isource
       M_i[j] = std::max({ M_i[j], D_i[j], I_i[j] });  // three source
+      max_pos = (max_pos == -1 || M_i[j] > M_i[max_pos]) ? j : max_pos;
     }
+    // if (debug) {
+    //   // for (int j = std::max(1, block_s * reg_size); j < block_e * reg_size; j++) {
+    //   //   std::cerr << i << " " << j << " " << M_i[j] << "\n";
+    //   // }
+    //   return std::vector<res_t>();
+    // }
     auto end3 = std::chrono::high_resolution_clock::now();
     total_part3 += std::chrono::duration_cast<std::chrono::microseconds>(end3 - start3);
+    for (int k = 0; k < cur.out.size(); k++) {
+      int suc = node[cur.out[k]].rank;
+      Ms[suc] = std::min(Ms[suc], max_pos + 1), Me[suc] = std::max(Me[suc], max_pos + 1);
+    }
   }
+  std::cerr << m << " " << sum * 1.0 / n << "\n";
+  std::cerr << sum * 1.0 / (1ll * (n * m)) << "\n";
   std::cerr << "avg pre size:" << tot / n << "\n";
   std::cerr << "部分1总耗时: " << total_part1.count() / 1000 << " ms\n";
   std::cerr << "部分2总耗时: " << total_part2.count() / 1000 << " ms\n";
   std::cerr << "部分3总耗时: " << total_part3.count() / 1000 << " ms\n";
-  // std::cout << M[(n - 1) * col_size + m] << "\n";
-  // std::cout << "M:\n";
-  // for (int i = 0; i < n; i++) {
-  //   for (int j = 0; j < col_size; j++) {
-  //     std::cout << M[i * col_size + j] << " \n"[j + 1 == col_size];
-  //   }
-  // }
-  // std::cout << "D:\n";
-  // for (int i = 0; i < n; i++) {
-  //   for (int j = 0; j < col_size; j++) {
-  //     std::cout << D[i * col_size + j] << " \n"[j + 1 == col_size];
-  //   }
-  // }
-  // std::cout << "I:\n";
-  // for (int i = 0; i < n; i++) {
-  //   for (int j = 0; j < col_size; j++) {
-  //     std::cout << I[i * col_size + j] << " \n"[j + 1 == col_size];
-  //   }
-  // }
+  std::cerr << M[(n - 1) * col_size + m] << "\n";
+  // return std::vector<res_t>();
+  if (3 * mtx_size == 5208) {
+    std::cout << "M:\n";
+    for (int i = 0; i < n; i++) {
+      std::cout << "Be:" << Bs[i] << " " << Be[i] << "\n";
+      for (int j = 0; j < col_size; j++) {
+        std::cout << M[i * col_size + j] << " \n"[j + 1 == col_size];
+      }
+    }
+    std::cout << "D:\n";
+    for (int i = 0; i < n; i++) {
+      std::cout << "Be:" << Bs[i] << " " << Be[i] << "\n";
+      for (int j = 0; j < col_size; j++) {
+        std::cout << D[i * col_size + j] << " \n"[j + 1 == col_size];
+      }
+    }
+    std::cout << "I:\n";
+    for (int i = 0; i < n; i++) {
+      std::cout << "Be:" << Bs[i] << " " << Be[i] << "\n";
+      for (int j = 0; j < col_size; j++) {
+        std::cout << I[i * col_size + j] << " \n"[j + 1 == col_size];
+      }
+    }
+  }
   // std::cerr << "finish" << "\n";
+  if (3 * mtx_size == 5208) std::cerr << _seq.size() << " " << seq.size() << "\n";
   int i = n - 1, j = m;
   std::vector<res_t> res;
   char op = 'M';
@@ -272,12 +340,27 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const std::string
       if (M[i * col_size + j] == D[i * col_size + j]) op = 'D';
       if (M[i * col_size + j] == I[i * col_size + j]) op = 'I';
     }
-    // std::cerr << op << " " << i << " " << j << "\n";
+    // std::cerr << op << " " << i << " " << j << " ";
+    // if (3 * mtx_size == 3237179904) {
+    //   std::cerr << op << " " << i << " " << j << " ";
+    //   if (op == 'M') {
+    //     std::cerr << M[i * col_size + j] << "\n";
+    //   }
+    //   else if (op == 'D')
+    //   {
+    //     std::cerr << D[i * col_size + j] << "\n";
+    //   }
+    //   if (i == 0 && j == 51) {
+    //     return res;
+    //   }
+    //   if (i == 0) exit(1);
+    // }
     if (op == 'M') {
       const node_t& cur = node[rank[i]];
       for (int k = 0; k < cur.in.size(); k++) {
         int p = node[cur.in[k]].rank; // rank
         const node_t& pre = node[cur.in[k]];
+        if (j - 1 >= 0 && !(Bs[pre.rank] <= j - 1 && j - 1 <= Be[pre.rank])) continue;
         if (j - 1 >= 0 && M[i * col_size + j] == M[p * col_size + j - 1] + (pre.base == seq[j - 1] ? match : mismatch)) {
           if (pre.base == seq[j - 1]) {
             // std::cout << "M";
@@ -298,7 +381,8 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const std::string
       continue;
     }
     if (op == 'I') {
-      if (j - 1 >= 0) {
+      const node_t& cur = node[rank[i]];
+      if (j - 1 >= 0 && Bs[cur.rank] <= j && j <= Be[cur.rank]) {
         // std::cout << "I";
         res.emplace_back(res_t(-1, seq[j - 1]));
         if (I[i * col_size + j] == I[i * col_size + j - 1] + e1) {
@@ -314,10 +398,11 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const std::string
     }
     if (op == 'D') {
       const node_t& cur = node[rank[i]];
-      // std::cerr << M[i][j] << " " << D[i][j] << "\n";
+      // std::cerr << M[i * col_size + j] << " " << D[i * col_size + j] << "\n";
       for (int k = 0; k < cur.in.size(); k++) {
         int p = node[cur.in[k]].rank; // rank
         const node_t& pre = node[cur.in[k]];
+        if (!(Bs[pre.rank] <= j && j <= Be[pre.rank])) continue;
         if (D[i * col_size + j] == D[p * col_size + j] + e1) {
           i = p;
           break;
@@ -331,6 +416,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const std::string
       continue;
     }
   }
+  std::cerr << "finish" << "\n";
   // std::cout << "sorce:" << M[n - 1][m] << "\n";
   if (mpool == nullptr) free_aligned(buff);
   return res;
