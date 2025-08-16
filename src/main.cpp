@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
     ("O,gap_open", "gap_open sorce", cxxopts::value<int>()->default_value("-4"))
     ("E,gap_ext", "gap_ext sorce", cxxopts::value<int>()->default_value("-2"))
     ("t,thread", "thread number", cxxopts::value<int>()->default_value("0"))
-    ("b,band_b", "band arg", cxxopts::value<int>()->default_value("50"))
+    ("b,band_b", "band arg", cxxopts::value<int>()->default_value("25"))
     ("f,band_f", "band arg", cxxopts::value<int>()->default_value("100"))
     ("h,help", "Print usage")
     ;
@@ -122,7 +122,7 @@ int main(int argc, char** argv) {
       // std::vector<res_t> res = POA(para, DAG, tseq);
       // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
       std::vector<res_t> res = abPOA(para, DAG, tseq, &mpool[0]);
-      return 0;
+      // return 0;
       // std::cerr << "add_path" << "\n";
       DAG->add_path(para->m, i, res);
       // std::cerr << "topsort" << "\n";
