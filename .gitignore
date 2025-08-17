@@ -2,3 +2,5 @@ build
 .vscode
 bin
 data/**/*
+result
+tresult 

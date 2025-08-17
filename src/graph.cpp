@@ -63,7 +63,6 @@ void graph::topsort(int op) { // if op == 1, is not normal topsort, the node_id 
       }
     }
   }
-  std::cerr << "1111" << "\n";
   hlen.resize(node.size());
   for (int i = 0; i < rank.size(); i++) { // ni topsort id dp
     int u = rank[i];
