@@ -10,7 +10,7 @@ void graph::add_adj(int seq_id, int from, int to) {
   node[to].add_in_adj(seq_id, from);
 }
 void graph::topsort(int op, int para_f) { // if op == 1, is not normal topsort, the node_id in queue must be the parent
-  std::queue<int> q;
+  std::vector<int> stk;
   std::vector<int> deg(node.size());
   if (op == 1) {
     for (int i = 0; i < node.size(); i++) {
@@ -22,13 +22,13 @@ void graph::topsort(int op, int para_f) { // if op == 1, is not normal topsort, 
       }
       deg[i] = sum_deg;
       // std::cout << i << " " << node[i].par_id << " " << sum_deg << "\n";
-      if (deg[i] == 0) q.push(i);
+      if (deg[i] == 0) stk.emplace_back(i);
     }
     rank.clear();
-    while (q.size()) {
-      int u = q.front();
+    while (stk.size()) {
+      int u = stk.back();
       // std::cout << u << "\n";
-      q.pop();
+      stk.pop_back();
       node_t& cur = node[u];
       cur.rank = rank.size();
       rank.emplace_back(u);
@@ -38,7 +38,7 @@ void graph::topsort(int op, int para_f) { // if op == 1, is not normal topsort, 
         for (int j = 0; j < son.out.size(); j++) {
           int v = node[son.out[j]].par_id;
           if (--deg[v] == 0) {
-            q.push(v);
+            stk.emplace_back(v);
           }
         }
       }
@@ -47,19 +47,19 @@ void graph::topsort(int op, int para_f) { // if op == 1, is not normal topsort, 
   }
   for (int i = 0; i < node.size(); i++) {
     deg[i] = node[i].in.size();
-    if (deg[i] == 0) q.push(i);
+    if (deg[i] == 0) stk.emplace_back(i);
   }
   rank.clear();
-  while (q.size()) {
-    int u = q.front();
-    q.pop();
+  while (stk.size()) {
+    int u = stk.back();
+    stk.pop_back();
     node_t& cur = node[u];
     cur.rank = rank.size();
     rank.emplace_back(u);
     for (int i = 0; i < cur.out.size(); i++) {
       int v = cur.out[i];
       if (--deg[v] == 0) {
-        q.push(v);
+        stk.emplace_back(v);
       }
     }
   }
