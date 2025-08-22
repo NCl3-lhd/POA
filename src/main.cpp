@@ -26,9 +26,10 @@ int main(int argc, char** argv) {
     ("t,thread", "thread number", cxxopts::value<int>()->default_value("0"))
     ("b,band_b", "band arg", cxxopts::value<int>()->default_value("50"))
     ("f,band_f", "band arg", cxxopts::value<int>()->default_value("100"))
+    ("s,sample_num", "sample_num", cxxopts::value<int>()->default_value("50"))
     ("h,help", "Print usage")
     ;
-  int thread;
+  int thread, sample_num;
   std::string path;
   para_t* para = new para_t();
   try {
@@ -49,6 +50,8 @@ int main(int argc, char** argv) {
     para->b = result["band_b"].as<int>();
     para->f = result["band_f"].as<int>();
     thread = result["thread"].as<int>();
+    sample_num = result["sample_num"].as<int>();
+    if (sample_num < 0) sample_num * -1;
   }
   catch (const cxxopts::exceptions::exception& e)
   {
@@ -69,7 +72,7 @@ int main(int argc, char** argv) {
   // seqs.resize(53);
   // handle alignment 
   graph* DAG = new graph();
-  DAG->init(para->m, 0, seqs[0].seq);
+  DAG->init(para, 0, seqs[0].seq);
   // seqs[0].seq = "TTGCCCTT";
   // seqs[1].seq = "CCAATTTT";
   // seqs[2].seq = "TGCT";
@@ -88,12 +91,12 @@ int main(int argc, char** argv) {
       // POA_SIMD(para, DAG, tseq);
       // std::vector<res_t> res = POA(para, DAG, tseq);
       // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
-      std::vector<res_t> res = abPOA(para, DAG, tseq, &mpool);
+      std::vector<res_t> res = para->f ? abPOA(para, DAG, tseq, &mpool) : POA_SIMD_ORIGIN(para, DAG, tseq, &mpool);
       // return 0;
       // std::cerr << "add_path" << "\n";
       DAG->add_path(para->m, i, res);
       // std::cerr << "topsort" << "\n";
-      DAG->topsort(i + 1 == seqs.size());
+      DAG->topsort(i + 1 == seqs.size(), para->f);
       // std::cout << i << " " << DAG->rank.size() << "\n";
     }
     // handle output 
@@ -105,7 +108,6 @@ int main(int argc, char** argv) {
     aligned_buff_t* mpool = new aligned_buff_t[thread];
     // std::cerr << "thread:" << thread << "\n";
     std::vector<std::future<std::vector<res_t>> > results;
-    int sample_num = 10 * thread;
     // sample_num = 0;
     for (int i = 1; i < seqs.size() && i <= sample_num; i++) { // ensure parallel before DAG have the enough sample seq
       if (i % 10 == 0) {
@@ -120,12 +122,12 @@ int main(int argc, char** argv) {
       // POA_SIMD(para, DAG, tseq);
       // std::vector<res_t> res = POA(para, DAG, tseq);
       // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
-      std::vector<res_t> res = abPOA(para, DAG, tseq, &mpool[0]);
+      std::vector<res_t> res = para->f ? abPOA(para, DAG, tseq, &mpool[0]) : POA_SIMD_ORIGIN(para, DAG, tseq, &mpool[0]);
       // return 0;
       // std::cerr << "add_path" << "\n";
       DAG->add_path(para->m, i, res);
       // std::cerr << "topsort" << "\n";
-      DAG->topsort(i + 1 == seqs.size());
+      DAG->topsort(i + 1 == seqs.size(), para->f);
     }
     for (int i = sample_num + 1; i < seqs.size(); i += thread) {  //seqs.size()
       results.clear();
@@ -143,7 +145,7 @@ int main(int argc, char** argv) {
           for (int j = 0; j < seq_i.size(); j++) {
             tseq += char26_table[seq_i[j]];
           }
-          std::vector<res_t> res = abPOA(para, DAG, tseq, cur_mpool);
+          std::vector<res_t> res = para->f ? abPOA(para, DAG, tseq, cur_mpool) : POA_SIMD_ORIGIN(para, DAG, tseq, cur_mpool);
           return res;
         }));
       }
@@ -158,7 +160,7 @@ int main(int argc, char** argv) {
         DAG->add_path(para->m, i + j, res[j], node_num);
       }
       // std::cerr << "topsort:" << "\n";
-      DAG->topsort(i + thread >= seqs.size());
+      DAG->topsort(i + thread >= seqs.size(), para->f);
 
       // std::cerr << "poa" << "\n";
       // POA_SIMD(para, DAG, tseq);

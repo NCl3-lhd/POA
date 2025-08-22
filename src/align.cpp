@@ -390,10 +390,10 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const std::string
   while (i > 0 || acj > 0) {
     // dsource
     int j = calj(acj, Bs[i]);
-    if (op == 'M') {
-      if (M[i][j] == D[i][j]) op = 'D';
-      if (M[i][j] == I[i][j]) op = 'I';
-    }
+    // if (op == 'M') {
+    //   if (M[i][j] == D[i][j]) op = 'D';
+    //   if (M[i][j] == I[i][j]) op = 'I';
+    // }
     // if (ans == 5114 && op == 'M') {
       // std::cerr << M[i][j] << "\n";
       // std::cerr << D[i][j] << "\n";
@@ -417,9 +417,9 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const std::string
     //   }
     //   if (i == 0) exit(1);
     // }
+    // std::cerr << op << "\n";
     if (op == 'M') {
       const node_t& cur = node[rank[i]];
-      // if (ans == 5114) std::cerr << cur.base << "\n";
       int bk = -1;
       for (int k = 0; k < cur.in.size(); k++) {
         int p = node[cur.in[k]].rank; // rank
@@ -431,23 +431,30 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const std::string
           bk = k;
         }
       }
-      assert(bk != -1);
-      int p = node[cur.in[bk]].rank; // rank
-      const node_t& pre = node[cur.in[bk]];
-      if (pre.base == seq[acj - 1]) {
-        // std::cout << "M";
-        res.emplace_back(res_t(pre.id, pre.base));
-      }
-      else {
-        // std::cout << "X";
-        const node_t& par = node[pre.par_id]; // dsu.find par
-        if (par.aligned_node[seq[acj - 1]] != -1) {
-          res.emplace_back(res_t(par.aligned_node[seq[acj - 1]], seq[acj - 1]));
+      // std::cerr << bk << "\n";
+      // assert(bk != -1);
+      if (bk != -1) {
+        int p = node[cur.in[bk]].rank; // rank
+        const node_t& pre = node[cur.in[bk]];
+        if (pre.base == seq[acj - 1]) {
+          // std::cout << "M";
+          res.emplace_back(res_t(pre.id, pre.base));
         }
-        else res.emplace_back(res_t(-1, seq[acj - 1], pre.par_id));
+        else {
+          // std::cout << "X";
+          const node_t& par = node[pre.par_id]; // dsu.find par
+          if (par.aligned_node[seq[acj - 1]] != -1) {
+            res.emplace_back(res_t(par.aligned_node[seq[acj - 1]], seq[acj - 1]));
+          }
+          else res.emplace_back(res_t(-1, seq[acj - 1], pre.par_id));
+        }
+        i = p, acj--;
+        continue;
       }
-      i = p, acj--;
-      continue;
+    }
+    if (op == 'M') {
+      if (M[i][j] == D[i][j]) op = 'D';
+      if (op == 'M' && M[i][j] == I[i][j]) op = 'I';
     }
     if (op == 'D') {
       const node_t& cur = node[rank[i]];
@@ -524,7 +531,7 @@ std::vector<res_t> POA_SIMD_ORIGIN(const para_t* para, const graph* DAG, const s
   void* buff = nullptr;
   // ===== 2. 对齐内存分配 =====
   // if ((ret = posix_memalign(&buff, SIMDTotalBytes, 3 * mtx_size * sizeof(int))) != 0) {
-  std::cerr << 3 * mtx_size << "\n";
+  // std::cerr << 3 * mtx_size << "\n";
   // return std::vector<res_t>();
   // std::cerr << buff << "\n";
   if (mpool != nullptr) mpool->alloc_aligned(&buff, SIMDTotalBytes, 3 * mtx_size * sizeof(int));
@@ -646,10 +653,10 @@ std::vector<res_t> POA_SIMD_ORIGIN(const para_t* para, const graph* DAG, const s
     auto end3 = std::chrono::high_resolution_clock::now();
     total_part3 += std::chrono::duration_cast<std::chrono::microseconds>(end3 - start3);
   }
-  std::cerr << "avg pre size:" << tot / n << "\n";
-  std::cerr << "部分1总耗时: " << total_part1.count() / 1000 << " ms\n";
-  std::cerr << "部分2总耗时: " << total_part2.count() / 1000 << " ms\n";
-  std::cerr << "部分3总耗时: " << total_part3.count() / 1000 << " ms\n";
+  // std::cerr << "avg pre size:" << tot / n << "\n";
+  // std::cerr << "部分1总耗时: " << total_part1.count() / 1000 << " ms\n";
+  // std::cerr << "部分2总耗时: " << total_part2.count() / 1000 << " ms\n";
+  // std::cerr << "部分3总耗时: " << total_part3.count() / 1000 << " ms\n";
   // std::cout << M[(n - 1) * col_size + m] << "\n";
   // std::cout << "M:\n";
   // for (int i = 0; i < n; i++) {
@@ -671,7 +678,7 @@ std::vector<res_t> POA_SIMD_ORIGIN(const para_t* para, const graph* DAG, const s
   // }
   // std::cerr << "finish dp" << "\n";
   int i = n - 1, j = (m % block_num) * reg_size + (m / block_num); // j = m
-  std::cerr << M[i * col_size + j] << "\n";
+  // std::cerr << M[i * col_size + j] << "\n";
   std::vector<res_t> res;
   // return res;
   char op = 'M';

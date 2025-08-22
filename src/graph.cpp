@@ -9,7 +9,7 @@ void graph::add_adj(int seq_id, int from, int to) {
   node[from].add_out_adj(seq_id, to);
   node[to].add_in_adj(seq_id, from);
 }
-void graph::topsort(int op) { // if op == 1, is not normal topsort, the node_id in queue must be the parent
+void graph::topsort(int op, int para_f) { // if op == 1, is not normal topsort, the node_id in queue must be the parent
   std::queue<int> q;
   std::vector<int> deg(node.size());
   if (op == 1) {
@@ -63,45 +63,48 @@ void graph::topsort(int op) { // if op == 1, is not normal topsort, the node_id 
       }
     }
   }
-  hlen.resize(node.size());
-  for (int i = 0; i < rank.size(); i++) { // ni topsort id dp
-    int u = rank[i];
-    const node_t& cur = node[u];
-    int wmax = -1, max_pre = -1;
-    for (int k = 0; k < cur.in.size(); k++) {
-      int v = cur.in[k];
-      int pre = node[v].rank;
-      if (cur.in_weight[k] > wmax) {
-        wmax = cur.in_weight[k];
-        max_pre = pre;
+  if (para_f > 0) {
+    hlen.resize(node.size());
+    for (int i = 0; i < rank.size(); i++) { // ni topsort id dp
+      int u = rank[i];
+      const node_t& cur = node[u];
+      int wmax = -1, max_pre = -1;
+      for (int k = 0; k < cur.in.size(); k++) {
+        int v = cur.in[k];
+        int pre = node[v].rank;
+        if (cur.in_weight[k] > wmax) {
+          wmax = cur.in_weight[k];
+          max_pre = pre;
+        }
       }
+      if (max_pre != -1) hlen[cur.rank] = hlen[max_pre] + 1;
+      // std::cerr << u << " " << lp[i] << " " << rp[i] << "\n";
     }
-    if (max_pre != -1) hlen[cur.rank] = hlen[max_pre] + 1;
-    // std::cerr << u << " " << lp[i] << " " << rp[i] << "\n";
-  }
 
-  tlen.resize(node.size());
-  tlen[node[1].rank] = 1;
-  for (int i = int(rank.size()) - 1; i >= 0; i--) { // ni topsort id dp
-    int u = rank[i];
-    const node_t& cur = node[u];
-    int wmax = -1, max_suc = -1;
-    for (int k = 0; k < cur.out.size(); k++) {
-      int v = cur.out[k];
-      int suc = node[v].rank;
-      if (cur.out_weight[k] > wmax) {
-        wmax = cur.out_weight[k];
-        max_suc = suc;
+    tlen.resize(node.size());
+    tlen[node[1].rank] = 1;
+    for (int i = int(rank.size()) - 1; i >= 0; i--) { // ni topsort id dp
+      int u = rank[i];
+      const node_t& cur = node[u];
+      int wmax = -1, max_suc = -1;
+      for (int k = 0; k < cur.out.size(); k++) {
+        int v = cur.out[k];
+        int suc = node[v].rank;
+        if (cur.out_weight[k] > wmax) {
+          wmax = cur.out_weight[k];
+          max_suc = suc;
+        }
       }
-    }
-    if (max_suc != -1) tlen[cur.rank] = tlen[max_suc] + 1;
+      if (max_suc != -1) tlen[cur.rank] = tlen[max_suc] + 1;
 
-    // std::cerr << u << " " << lp[i] << " " << rp[i] << "\n";
+      // std::cerr << u << " " << lp[i] << " " << rp[i] << "\n";
+    }
+    // lp[node[0].rank] = 0; // src lp = 0
   }
-  // lp[node[0].rank] = 0; // src lp = 0
 }
-void graph::init(int para_m, int seq_id, const std::string& str) {
+void graph::init(para_t* para, int seq_id, const std::string& str) {
   // 清空现有数据
+  int para_m = para->m, para_f = para->f;
   node.clear();
   node.emplace_back(node_t(node.size(), char26_table['N'], para_m)); // src 0
   node.emplace_back(node_t(node.size(), char26_table['N'], para_m)); // sink 1
@@ -113,7 +116,7 @@ void graph::init(int para_m, int seq_id, const std::string& str) {
     pre_id = cur_id;
   }
   add_adj(seq_id, pre_id, 1); // 
-  topsort(0);
+  topsort(0, para_f);
 }
 void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int graph_node_num) {
   int anchored_id = 1; // sink
