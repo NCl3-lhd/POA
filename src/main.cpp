@@ -8,6 +8,8 @@
 #include "mem_alloc_utils.h"
 #include "ThreadPool.h"
 #include <algorithm>
+#include <numeric>
+#include "minimizer.h"
 // #include "kband.h"
 
 // extern unsigned char nt4_table[256];
@@ -26,7 +28,10 @@ int main(int argc, char** argv) {
     ("t,thread", "thread number", cxxopts::value<int>()->default_value("0"))
     ("b,band_b", "band arg", cxxopts::value<int>()->default_value("50"))
     ("f,band_f", "band arg", cxxopts::value<int>()->default_value("100"))
+    ("k,k_mer", "k_mer lenth", cxxopts::value<int>()->default_value("19")) //19
+    ("w,window", "k_mer_window lenth", cxxopts::value<int>()->default_value("10"))
     ("s,sample_num", "sample_num", cxxopts::value<int>()->default_value("50"))
+    ("p,progressive_poa", "is progressive_poa", cxxopts::value<bool>()->default_value("false"))
     ("h,help", "Print usage")
     ;
   int thread, sample_num;
@@ -49,6 +54,9 @@ int main(int argc, char** argv) {
     para->gap_ext1 = result["gap_ext"].as<int>();
     para->b = result["band_b"].as<int>();
     para->f = result["band_f"].as<int>();
+    para->k = result["k_mer"].as<int>();
+    para->w = result["window"].as<int>();
+    para->progressive_poa = result["progressive_poa"].as<bool>();
     thread = result["thread"].as<int>();
     sample_num = result["sample_num"].as<int>();
     if (sample_num < 0) sample_num * -1;
@@ -69,23 +77,46 @@ int main(int argc, char** argv) {
     std::cerr << "error read file: " << e.what() << std::endl;
     return 1;
   }
+  // std::cerr << seqs.size() << "\n";
   // seqs.resize(53);
   // handle alignment 
   graph* DAG = new graph();
-  DAG->init(para, 0, seqs[0].seq);
+  std::vector<int> ord(seqs.size());
+  std::iota(ord.begin(), ord.end(), 0);
+  std::sort(ord.begin(), ord.end(), [&](const int& i, const int& j) {
+    return  seqs[i].seq.size() > seqs[j].seq.size();
+  });
+  if (para->progressive_poa) {
+    std::cerr << "progressive_poa" << "\n";
+    minimizer_t mm = minimizer_t(para, seqs);
+    ord = mm.get_guide_tree(para);
+    // std::reverse(ord.begin(), ord.end());
+    // for (int i = 0; i < seqs.size(); i++) {
+    //   std::cerr << ord[i] << "\n";
+    // }
+  }
+  // std::cerr << mm.mm_v.n << "\n";
+
+
+  // for (int i = 0; i < seqs.size(); i++) {
+  //   std::cout << i << " " << ord[i] << " " << seqs[ord[i]].seq.size() << "\n";
+  // }
+  int seq_id = ord[0];
+  DAG->init(para, seq_id, seqs[seq_id].seq);
   // seqs[0].seq = "TTGCCCTT";
   // seqs[1].seq = "CCAATTTT";
   // seqs[2].seq = "TGCT";
   if (!thread) { // 
     aligned_buff_t mpool;
     for (int i = 1; i < seqs.size(); i++) {  //seqs.size()
+      seq_id = ord[i];
       if (i % 10 == 0) {
         std::cerr << "[" << i << "/" << seqs.size() << "]" << "\n";
       }
       std::string tseq;
       tseq += char26_table['N'];
-      for (int j = 0; j < seqs[i].seq.size(); j++) {
-        tseq += char26_table[seqs[i].seq[j]];
+      for (int j = 0; j < seqs[seq_id].seq.size(); j++) {
+        tseq += char26_table[seqs[seq_id].seq[j]];
       }
       // std::cerr << "poa" << "\n";
       // POA_SIMD(para, DAG, tseq);
@@ -94,7 +125,7 @@ int main(int argc, char** argv) {
       std::vector<res_t> res = para->f ? abPOA(para, DAG, tseq, &mpool) : POA_SIMD_ORIGIN(para, DAG, tseq, &mpool);
       // return 0;
       // std::cerr << "add_path" << "\n";
-      DAG->add_path(para->m, i, res);
+      DAG->add_path(para->m, seq_id, res);
       // std::cerr << "topsort" << "\n";
       DAG->topsort(i + 1 == seqs.size(), para->f);
       // std::cout << i << " " << DAG->rank.size() << "\n";
@@ -110,13 +141,14 @@ int main(int argc, char** argv) {
     std::vector<std::future<std::vector<res_t>> > results;
     // sample_num = 0;
     for (int i = 1; i < seqs.size() && i <= sample_num; i++) { // ensure parallel before DAG have the enough sample seq
+      seq_id = ord[i];
       if (i % 10 == 0) {
         std::cerr << "[" << i << "/" << seqs.size() << "]" << "\n";
       }
       std::string tseq;
       tseq += char26_table['N'];
-      for (int j = 0; j < seqs[i].seq.size(); j++) {
-        tseq += char26_table[seqs[i].seq[j]];
+      for (int j = 0; j < seqs[seq_id].seq.size(); j++) {
+        tseq += char26_table[seqs[seq_id].seq[j]];
       }
       // std::cerr << "poa" << "\n";
       // POA_SIMD(para, DAG, tseq);
@@ -125,18 +157,19 @@ int main(int argc, char** argv) {
       std::vector<res_t> res = para->f ? abPOA(para, DAG, tseq, &mpool[0]) : POA_SIMD_ORIGIN(para, DAG, tseq, &mpool[0]);
       // return 0;
       // std::cerr << "add_path" << "\n";
-      DAG->add_path(para->m, i, res);
+      DAG->add_path(para->m, seq_id, res);
       // std::cerr << "topsort" << "\n";
       DAG->topsort(i + 1 == seqs.size(), para->f);
     }
     for (int i = sample_num + 1; i < seqs.size(); i += thread) {  //seqs.size()
       results.clear();
       for (int j = 0; j < thread && i + j < seqs.size(); j++) {
+        seq_id = ord[i + j];
         if (j % 3 == 0) {
           std::cerr << "[" << i + j << "/" << seqs.size() << "]" << "\n";
         }
         // const char* seq_i = seqs[i].seq.c_str();
-        const std::string& seq_i = seqs[i + j].seq;
+        const std::string& seq_i = seqs[seq_id].seq;
         aligned_buff_t* cur_mpool = &mpool[j];
         results.emplace_back(
           pool.enqueue([para, DAG, &seq_i, cur_mpool] {
@@ -150,14 +183,14 @@ int main(int argc, char** argv) {
         }));
       }
       // std::cerr << "add_path" << "\n";
-      int seq_id = i;
       std::vector<std::vector<res_t>> res;
       for (auto&& result : results) {
         res.emplace_back(result.get());
       }
       int node_num = DAG->node.size();
       for (int j = 0; j < res.size(); j++) {
-        DAG->add_path(para->m, i + j, res[j], node_num);
+        seq_id = ord[i + j];
+        DAG->add_path(para->m, seq_id, res[j], node_num);
       }
       // std::cerr << "topsort:" << "\n";
       DAG->topsort(i + thread >= seqs.size(), para->f);

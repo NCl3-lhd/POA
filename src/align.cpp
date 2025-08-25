@@ -20,6 +20,8 @@ constexpr int reg_size = SIMDTotalBytes / sizeof(int); // number of int in reg
 
 constexpr int INF = 0x3f3f3f3f; // 0x3f3f3f3f
 constexpr int NEG_INF = 0xc0c0c0c0; //
+constexpr int M_OP = 1, D_OP = 2, I_OP = 4, ALL_OP = 7;
+
 inline int calj(int acj, int Bs) {
   return  acj - Bs * reg_size;
 }
@@ -331,7 +333,6 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const std::string
   // std::cerr << "部分3总耗时: " << total_part3.count() / 1000 << " ms\n";
   int i = n - 1, acj = m;
   int ans = M[i][calj(acj, Bs[i])];
-  // std::cerr << M[i][calj(acj, Bs[i])] << "\n";
   // std::cout << "M:\n";
   // for (int i = 0; i < n; i++) {
   //   std::cout << "Be:" << Bs[i] << " " << Be[i] << "\n";
@@ -385,15 +386,13 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const std::string
   // if (3 * mtx_size == 5208) std::cerr << _seq.size() << " " << seq.size() << "\n";
   std::vector<res_t> res;
   // return res;
-  char op = 'M';
+  int j = calj(acj, Bs[i]);
+  int op = D[i][j] >= M[i][j] ? D_OP : I[i][j] >= M[i][j] ? I_OP : M_OP;
+  // std::cerr << i << " " << j << " " << M[i][calj(acj, Bs[i])] << "\n";
   // std::cerr << "finsh align" << "\n";
   while (i > 0 || acj > 0) {
     // dsource
-    int j = calj(acj, Bs[i]);
-    // if (op == 'M') {
-    //   if (M[i][j] == D[i][j]) op = 'D';
-    //   if (M[i][j] == I[i][j]) op = 'I';
-    // }
+    j = calj(acj, Bs[i]);
     // if (ans == 5114 && op == 'M') {
       // std::cerr << M[i][j] << "\n";
       // std::cerr << D[i][j] << "\n";
@@ -404,7 +403,6 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const std::string
     //   // exit(0);
     // }
     // if (3 * mtx_size == 3237179904) {
-    //   std::cerr << op << " " << i << " " << j << " ";
     //   if (op == 'M') {
     //     std::cerr << M[i * col_size + j] << "\n";
     //   }
@@ -418,22 +416,139 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const std::string
     //   if (i == 0) exit(1);
     // }
     // std::cerr << op << "\n";
-    if (op == 'M') {
+    // if (op & M_OP) {  // M
+    //   // std::cerr << op << " " << i << " " << j << " ";
+    //   // std::cerr << M[i][j] << " " << D[i][j] << " " << I[i][j] << "\n";
+    //   // if (i == 15932 && j == 205) exit(0);
+    //   const node_t& cur = node[rank[i]];
+    //   int bk = -1;
+    //   for (int k = 0; k < cur.in.size(); k++) {
+    //     int p = node[cur.in[k]].rank; // rank
+    //     const node_t& pre = node[cur.in[k]];
+    //     if (pre.base != seq[acj - 1]) continue;
+    //     // M
+    //     int pj = calj(acj, Bs[p]);
+    //     // if (ans == 5114 && pj - 1 >= 0) 
+    //       // std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
+    //     if (pj - 1 >= 0 && M[i][j] == M[p][pj - 1] + match && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
+    //       bk = k;
+    //       // break;
+    //     }
+    //   }
+    //   // std::cerr << bk << "\n";
+    //   // assert(bk != -1);
+    //   if (bk != -1) {
+    //     // std::cerr << "M";
+    //     op = ALL_OP;
+    //     int p = node[cur.in[bk]].rank; // rank
+    //     const node_t& pre = node[cur.in[bk]];
+    //     if (pre.base == seq[acj - 1]) {
+    //       // std::cout << "M";
+    //       res.emplace_back(res_t(pre.id, pre.base));
+    //     }
+    //     else {
+    //       // std::cout << "X";
+    //       const node_t& par = node[pre.par_id]; // dsu.find par
+    //       if (par.aligned_node[seq[acj - 1]] != -1) {
+    //         res.emplace_back(res_t(par.aligned_node[seq[acj - 1]], seq[acj - 1]));
+    //       }
+    //       else res.emplace_back(res_t(-1, seq[acj - 1], pre.par_id));
+    //     }
+    //     i = p, acj--;
+    //     continue;
+    //   }
+    // }
+    if (op & I_OP) {
+      const node_t& cur = node[rank[i]];
+      if (j - 1 >= 0) {
+        if (!(op & M_OP) || M[i][j] == I[i][j]) {
+          // std::cerr << "I";
+          res.emplace_back(res_t(-1, seq[acj - 1]));
+          if (I[i][j] == I[i][j - 1] + e1) {
+            op = I_OP;
+            acj--;
+            continue;
+          }
+          if (I[i][j] == M[i][j - 1] + o1) {
+            op = M_OP | D_OP;
+            acj--;
+            continue;
+          }
+        }
+      }
+    }
+    if (op & D_OP) {
+      if (!(op & M_OP) || M[i][j] == D[i][j]) {
+        // std::cerr << "D";
+        const node_t& cur = node[rank[i]];
+        // std::cerr << M[i * col_size + j] << " " << D[i * col_size + j] << "\n";
+        int bk = -1;char bop;
+        for (int k = 0; k < cur.in.size(); k++) {
+          int p = node[cur.in[k]].rank; // rank
+          const node_t& pre = node[cur.in[k]];
+          if (Bs[pre.rank] <= acj / reg_size && acj / reg_size < Be[pre.rank] - 1) {
+            int pj = calj(acj, Bs[p]);
+            if (D[i][j] == D[p][pj] + e1 && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
+              bk = k;
+              bop = D_OP;
+              // break;
+            }
+            // if (D[i][j] == M[p][pj] + o1 && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
+            //   bk = k;
+            //   bop = 'M';
+            //   // break;
+            // }
+          }
+        }
+        if (bk == -1) {
+          for (int k = 0; k < cur.in.size(); k++) {
+            int p = node[cur.in[k]].rank; // rank
+            const node_t& pre = node[cur.in[k]];
+            if (Bs[pre.rank] <= acj / reg_size && acj / reg_size < Be[pre.rank] - 1) {
+              int pj = calj(acj, Bs[p]);
+              if (D[i][j] == M[p][pj] + o1 && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
+                bk = k;
+                bop = M_OP | I_OP;
+                // break;
+              }
+            }
+          }
+        }
+        assert(bk != -1);
+        i = node[cur.in[bk]].rank;
+        op = bop;
+        continue;
+
+      }
+    }
+    // if (op &) {
+    //   if (M[i][j] == D[i][j]) op = 'D';
+    //   if (op == 'M' && M[i][j] == I[i][j]) op = 'I';
+    // }
+    if (op & M_OP) {  // M
+      // std::cerr << op << " " << i << " " << j << " ";
+      // std::cerr << M[i][j] << " " << D[i][j] << " " << I[i][j] << "\n";
+      // if (i == 15932 && j == 205) exit(0);
       const node_t& cur = node[rank[i]];
       int bk = -1;
       for (int k = 0; k < cur.in.size(); k++) {
         int p = node[cur.in[k]].rank; // rank
         const node_t& pre = node[cur.in[k]];
+        if (pre.base != seq[acj - 1]) continue;
+        // M
         int pj = calj(acj, Bs[p]);
         // if (ans == 5114 && pj - 1 >= 0) 
           // std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
-        if (pj - 1 >= 0 && M[i][j] == M[p][pj - 1] + (pre.base == seq[acj - 1] ? match : mismatch) && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
+        if (pj - 1 >= 0 && M[i][j] == M[p][pj - 1] + match && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
           bk = k;
+          // break;
         }
       }
       // std::cerr << bk << "\n";
       // assert(bk != -1);
       if (bk != -1) {
+        // std::cerr << "M";
+        op = ALL_OP;
         int p = node[cur.in[bk]].rank; // rank
         const node_t& pre = node[cur.in[bk]];
         if (pre.base == seq[acj - 1]) {
@@ -452,51 +567,60 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const std::string
         continue;
       }
     }
-    if (op == 'M') {
-      if (M[i][j] == D[i][j]) op = 'D';
-      if (op == 'M' && M[i][j] == I[i][j]) op = 'I';
-    }
-    if (op == 'D') {
+    if (op & M_OP) {  // X
+      // std::cerr << op << " " << i << " " << j << " ";
+      // std::cerr << M[i][j] << " " << D[i][j] << " " << I[i][j] << "\n";
+      // if (i == 15932 && j == 205) exit(0);
       const node_t& cur = node[rank[i]];
-      // std::cerr << M[i * col_size + j] << " " << D[i * col_size + j] << "\n";
-      int bk = -1;char bop;
+      int bk = -1;
+
       for (int k = 0; k < cur.in.size(); k++) {
         int p = node[cur.in[k]].rank; // rank
         const node_t& pre = node[cur.in[k]];
-        if (Bs[pre.rank] <= acj / reg_size && acj / reg_size < Be[pre.rank] - 1) {
-          int pj = calj(acj, Bs[p]);
-          if (D[i][j] == M[p][pj] + o1 && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
-            bk = k;
-            bop = 'M';
-          }
-          if (D[i][j] == D[p][pj] + e1 && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
-            bk = k;
-            bop = 'D';
-          }
+        if (pre.base == seq[acj - 1]) continue;
+        int pj = calj(acj, Bs[p]);
+        // X
+        // if (ans == 5114 && pj - 1 >= 0) 
+          // std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
+        if (pj - 1 >= 0 && M[i][j] == M[p][pj - 1] + mismatch && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
+          bk = k;
+          // break;
         }
       }
+      // std::cerr << bk << "\n";
       assert(bk != -1);
-      i = node[cur.in[bk]].rank;
-      op = bop;
-      continue;
-    }
-    if (op == 'I') {
-      const node_t& cur = node[rank[i]];
-      if (j - 1 >= 0) {
-        // std::cout << "I";
-        res.emplace_back(res_t(-1, seq[acj - 1]));
-        if (I[i][j] == M[i][j - 1] + o1) {
-          op = 'M';
-          acj--;
-          continue;
+      if (bk != -1) {
+        // std::cerr << "X";
+        op = ALL_OP;
+        int p = node[cur.in[bk]].rank; // rank
+        const node_t& pre = node[cur.in[bk]];
+        if (pre.base == seq[acj - 1]) {
+          // std::cout << "M";
+          res.emplace_back(res_t(pre.id, pre.base));
         }
-        if (I[i][j] == I[i][j - 1] + e1) {
-          acj--;
-          continue;
+        else {
+          // std::cout << "X";
+          const node_t& par = node[pre.par_id]; // dsu.find par
+          if (par.aligned_node[seq[acj - 1]] != -1) {
+            res.emplace_back(res_t(par.aligned_node[seq[acj - 1]], seq[acj - 1]));
+          }
+          else res.emplace_back(res_t(-1, seq[acj - 1], pre.par_id));
         }
+        i = p, acj--;
+        continue;
       }
     }
+    // if (op == 'M') {
+    //   if (M[i][j] == I[i][j]) op = 'I';
+    //   if (op == 'M' && M[i][j] == D[i][j]) op = 'D';
+    // }
+
   }
+  // std::cerr << "\n";
+  // if (acj > 0) {
+  //   std::cerr << "acj:" << acj << "\n";
+  //   exit(0);
+  // }
   // std::cerr << "finish" << "\n";
   // std::cout << "sorce:" << M[n - 1][m] << "\n";
   if (mpool == nullptr) free_aligned(buff);
@@ -690,52 +814,70 @@ std::vector<res_t> POA_SIMD_ORIGIN(const para_t* para, const graph* DAG, const s
     int* M_i = M + i * col_size;
     int* D_i = D + i * col_size;
     int* I_i = I + i * col_size;
+    int hit = 0;
     // dsource
+    // std::cerr << op << " " << i << " " << j << "\n";
     if (op == 'M') {
       if (M_i[j] == D_i[j]) op = 'D';
       if (M_i[j] == I_i[j]) op = 'I';
     }
-    // std::cerr << op << " " << i << " " << j << "\n";
     if (op == 'M') {
       const node_t& cur = node[rank[i]];
       for (int k = 0; k < cur.in.size(); k++) {
         int p = node[cur.in[k]].rank; // rank
         const node_t& pre = node[cur.in[k]];
         int* M_p = M + p * col_size;
-        if (j - reg_size >= 0 && M_i[j] == M_p[j - reg_size] + (pre.base == seq[j - reg_size] ? match : mismatch)) {
-          if (pre.base == seq[j - reg_size]) {
+        if (j - reg_size >= 0) {
+          if (pre.base == seq[j - reg_size] && M_i[j] == M_p[j - reg_size] + match) {
             // std::cout << "M";
             res.emplace_back(res_t(pre.id, pre.base));
+            i = p, j -= reg_size;
+            hit = 1;
+            break;
           }
-          else {
-            // std::cout << "X";
+        }
+        else {
+          if (pre.base == seq[j - 1 + offset] && M_i[j] == M_p[j - 1 + offset] + match) {
+            // std::cout << "M";
+            res.emplace_back(res_t(pre.id, pre.base));
+            i = p, j = j - 1 + offset;
+            hit = 1;
+            break;
+          }
+        }
+      }
+
+      for (int k = 0; !hit && k < cur.in.size(); k++) {
+        int p = node[cur.in[k]].rank; // rank
+        const node_t& pre = node[cur.in[k]];
+        int* M_p = M + p * col_size;
+        if (j - reg_size >= 0) {
+          if (pre.base != seq[j - reg_size] && M_i[j] == M_p[j - reg_size] + mismatch) {
             const node_t& par = node[pre.par_id]; // dsu.find par
             if (par.aligned_node[seq[j - reg_size]] != -1) {
               res.emplace_back(res_t(par.aligned_node[seq[j - reg_size]], seq[j - reg_size]));
             }
             else res.emplace_back(res_t(-1, seq[j - reg_size], pre.par_id));
+            i = p, j -= reg_size;
+            hit = 1;
+            break;
           }
-          i = p, j -= reg_size;
-          break;
         }
-        else if (M_i[j] == M_p[j - 1 + offset] + (pre.base == seq[j - 1 + offset] ? match : mismatch)) {
-          if (pre.base == seq[j - 1 + offset]) {
-            // std::cout << "M";
-            res.emplace_back(res_t(pre.id, pre.base));
-          }
-          else {
+        else {
+          if (pre.base != seq[j - 1 + offset] && M_i[j] == M_p[j - 1 + offset] + mismatch) {
             // std::cout << "X";
             const node_t& par = node[pre.par_id]; // dsu.find par
             if (par.aligned_node[seq[j - 1 + offset]] != -1) {
               res.emplace_back(res_t(par.aligned_node[seq[j - 1 + offset]], seq[j - 1 + offset]));
             }
             else res.emplace_back(res_t(-1, seq[j - 1 + offset], pre.par_id));
+            i = p, j = j - 1 + offset;
+            hit = 1;
+            break;
           }
-          i = p, j = j - 1 + offset;
-          break;
         }
       }
-      continue;
+      if (hit) continue;
     }
     if (op == 'I') {
       if (j - reg_size >= 0) {
@@ -771,12 +913,18 @@ std::vector<res_t> POA_SIMD_ORIGIN(const para_t* para, const graph* DAG, const s
         const node_t& pre = node[cur.in[k]];
         int* D_p = D + p * col_size;
         int* M_p = M + p * col_size;
-        if (D_i[j] == M_p[j] + o1) {
-          op = 'M';
+        if (D_i[j] == D_p[j] + e1) {
           i = p;
           break;
         }
-        if (D_i[j] == D_p[j] + e1) {
+      }
+      for (int k = 0; k < cur.in.size(); k++) {
+        int p = node[cur.in[k]].rank; // rank
+        const node_t& pre = node[cur.in[k]];
+        int* D_p = D + p * col_size;
+        int* M_p = M + p * col_size;
+        if (D_i[j] == M_p[j] + o1) {
+          op = 'M';
           i = p;
           break;
         }

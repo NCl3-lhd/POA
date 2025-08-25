@@ -7,5 +7,7 @@ struct para_t {
   int m;std::vector<int> mat;std::string mat_fp;// score matrix  m is alphabet size
   int match, mismatch, gap_open1, gap_open2, gap_ext1, gap_ext2; int inf_min;
   int b, f;// adband
+  int k, w;// k-mer
+  bool progressive_poa;
 };
 #endif

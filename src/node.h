@@ -44,7 +44,9 @@ struct node_t {
       out.emplace_back(to);
       out_weight.emplace_back(1);
     }
+    // if (seq_id == 2 && to == 14) std::cerr << id << " " << seq_id << "\n";
     if (ids.empty() || ids.back() != seq_id) ids.emplace_back(seq_id);
+
   }
 };
 // std::vector<sequence> readFile(const char* path);

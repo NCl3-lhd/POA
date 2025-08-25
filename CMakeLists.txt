@@ -13,7 +13,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
 find_package(ZLIB REQUIRED)
 
 # 查找 src 目录下的所有 .cpp 文件
-file(GLOB SOURCES "src/*.cpp")
+file(GLOB SOURCES "src/*.cpp" "include/*.c")
 
 # 添加可执行文件
 add_executable(POA ${SOURCES})
