@@ -83,13 +83,14 @@ int main(int argc, char** argv) {
   graph* DAG = new graph();
   std::vector<int> ord(seqs.size());
   std::iota(ord.begin(), ord.end(), 0);
-  std::sort(ord.begin(), ord.end(), [&](const int& i, const int& j) {
-    return  seqs[i].seq.size() > seqs[j].seq.size();
-  });
+  // std::sort(ord.begin(), ord.end(), [&](const int& i, const int& j) {
+  //   return  seqs[i].seq.size() > seqs[j].seq.size();
+  // });
+  minimizer_t* mm = nullptr;
   if (para->progressive_poa) {
     std::cerr << "progressive_poa" << "\n";
-    minimizer_t mm = minimizer_t(para, seqs);
-    ord = mm.get_guide_tree(para);
+    mm = new minimizer_t(para, seqs);
+    ord = mm->get_guide_tree(para);
     // std::reverse(ord.begin(), ord.end());
     // for (int i = 0; i < seqs.size(); i++) {
     //   std::cerr << ord[i] << "\n";
@@ -122,7 +123,7 @@ int main(int argc, char** argv) {
       // POA_SIMD(para, DAG, tseq);
       // std::vector<res_t> res = POA(para, DAG, tseq);
       // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
-      std::vector<res_t> res = para->f ? abPOA(para, DAG, tseq, &mpool) : POA_SIMD_ORIGIN(para, DAG, tseq, &mpool);
+      std::vector<res_t> res = para->f ? abPOA(para, DAG, mm, tseq, &mpool) : POA_SIMD_ORIGIN(para, DAG, tseq, &mpool);
       // return 0;
       // std::cerr << "add_path" << "\n";
       DAG->add_path(para->m, seq_id, res);
@@ -154,7 +155,7 @@ int main(int argc, char** argv) {
       // POA_SIMD(para, DAG, tseq);
       // std::vector<res_t> res = POA(para, DAG, tseq);
       // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
-      std::vector<res_t> res = para->f ? abPOA(para, DAG, tseq, &mpool[0]) : POA_SIMD_ORIGIN(para, DAG, tseq, &mpool[0]);
+      std::vector<res_t> res = para->f ? abPOA(para, DAG, mm, tseq, &mpool[0]) : POA_SIMD_ORIGIN(para, DAG, tseq, &mpool[0]);
       // return 0;
       // std::cerr << "add_path" << "\n";
       DAG->add_path(para->m, seq_id, res);
@@ -172,13 +173,13 @@ int main(int argc, char** argv) {
         const std::string& seq_i = seqs[seq_id].seq;
         aligned_buff_t* cur_mpool = &mpool[j];
         results.emplace_back(
-          pool.enqueue([para, DAG, &seq_i, cur_mpool] {
+          pool.enqueue([para, DAG, mm, &seq_i, cur_mpool] {
           std::string tseq;
           tseq += char26_table['N'];
           for (int j = 0; j < seq_i.size(); j++) {
             tseq += char26_table[seq_i[j]];
           }
-          std::vector<res_t> res = para->f ? abPOA(para, DAG, tseq, cur_mpool) : POA_SIMD_ORIGIN(para, DAG, tseq, cur_mpool);
+          std::vector<res_t> res = para->f ? abPOA(para, DAG, mm, tseq, cur_mpool) : POA_SIMD_ORIGIN(para, DAG, tseq, cur_mpool);
           return res;
         }));
       }
@@ -228,5 +229,8 @@ int main(int argc, char** argv) {
   para = nullptr;  // 防止后续误用
   delete DAG;
   DAG = nullptr;  // 防止后续误用
+  delete mm;
+  mm = nullptr;  // 防止后续误用
+
   return 0;
 }

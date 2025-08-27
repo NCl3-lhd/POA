@@ -10,8 +10,11 @@ void mm_sketch(void* km, const char* str, int len, int w, int k, uint32_t rid, i
 struct minimizer_t {
   void* km;
   size_t seqs_size;
+  int maxl;
+  std::vector<int> len;
   int* mm_h;
   mm128_v mm_v;
+  std::vector<int> max_sim; // is seq_id;
   minimizer_t(para_t* para, const std::vector<seq_t>& seqs);
   ~minimizer_t();
   void init(para_t* para, const std::vector<seq_t>& seqs);

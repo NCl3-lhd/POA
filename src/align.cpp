@@ -144,7 +144,7 @@ std::vector<res_t> POA(para_t* para, const graph& DAG, const std::string& seq) {
   return res;
 };
 
-std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const std::string& _seq, aligned_buff_t* mpool) {
+std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t* mm, const std::string& _seq, aligned_buff_t* mpool) {
   // std::chrono::microseconds total_part1(0);
   // std::chrono::microseconds total_part2(0);
   // std::chrono::microseconds total_part3(0);
@@ -416,7 +416,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const std::string
     //   if (i == 0) exit(1);
     // }
     // std::cerr << op << "\n";
-    // if (op & M_OP) {  // M
+    // if (op == ALL_OP) {  // M
     //   // std::cerr << op << " " << i << " " << j << " ";
     //   // std::cerr << M[i][j] << " " << D[i][j] << " " << I[i][j] << "\n";
     //   // if (i == 15932 && j == 205) exit(0);

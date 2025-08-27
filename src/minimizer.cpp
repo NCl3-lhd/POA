@@ -160,6 +160,13 @@ void minimizer_t::init(para_t* para, const std::vector<seq_t>& seqs) {
   km = km_init();
   mm_v = { 0, 0, nullptr };
   seqs_size = seqs.size();
+  maxl = 0;
+  // std::cerr << "111 " << "\n";
+  len.resize(seqs_size);
+  for (int i = 0; i < seqs_size; i++) {
+    len[i] = seqs[i].seq.size();
+    maxl = std::max(maxl, len[i]);
+  }
   // std::cerr << "collect_mm" << "\n";
   mm_h = (int*)malloc((seqs_size + 1) * sizeof(int));
   collect_mm(km, seqs, para);//mm ->Minimizer
@@ -226,57 +233,126 @@ std::vector<int> minimizer_t::get_guide_tree(para_t* para) {
       }
     }
     free(mm_cnt);
-
     // calculate jaccard similarity between each two sequences
-    double* jac_sim = (double*)calloc((seqs_size * (seqs_size - 1)) >> 1, sizeof(double));
+    std::cerr << "flag" << "\n";
+    double* jac_sim = (double*)calloc((seqs_size * (seqs_size)), sizeof(double));
     // 0: 
     // 1: 0 
     // 2: 0 1 
     double max_jac = -1.0, jac; int max_i = -1, max_j = -1;
-    for (i = 1; i < (size_t)seqs_size; ++i) {
-      for (j = 0; j < i; ++j) {
-        int tot_n = mm_hit_n[((i * (i + 1)) >> 1) + i] + mm_hit_n[((j * (j + 1)) >> 1) + j] - mm_hit_n[((i * (i + 1)) >> 1) + j];
+    for (i = 0; i < (size_t)seqs_size; ++i) {
+      for (j = 0; j < (size_t)seqs_size; ++j) {
+        if (i == j) continue;
+        int shared_n = i > j ? mm_hit_n[((i * (i + 1)) >> 1) + j] : mm_hit_n[((j * (j + 1)) >> 1) + i];
+        int tot_n = mm_hit_n[((i * (i + 1)) >> 1) + i] + mm_hit_n[((j * (j + 1)) >> 1) + j] - shared_n;
         if (tot_n == 0) jac = 0;
         else if (tot_n < 0) {
           std::cerr << __func__ << "Bug in progressive tree building. (1)" << "\n";
           exit(EXIT_FAILURE);
         }
-        else jac = (0.0 + mm_hit_n[((i * (i + 1)) >> 1) + j]) / tot_n;
-        jac_sim[((i * (i - 1)) >> 1) + j] = jac; // jac_sim[i][j] = jac_sim[i*(i-1)/2 + j]
+        else {
+          jac = (0.0 + shared_n) / tot_n;
+          jac = jac * ((0.51 * len[i] / maxl) + (0.49 * len[j] / maxl));
+          // jac = 1 * jac + 0 * ((0.525 * len[i] / maxl) + (0.475 * len[j] / maxl));
+        }
+        jac_sim[i * seqs_size + j] = jac; // jac_sim[i][j] = jac_sim[i*(i-1)/2 + j]
         if (jac > max_jac) {
           max_jac = jac; max_i = i, max_j = j;
         }
       }
     }
 
-    // std::cerr << max_jac << " " << max_i << " " << max_j << "\n";
+    std::cerr << max_jac << " " << max_i << " " << max_j << "\n";
     // build guide tree
     // first pick two with the biggest jac (max_i, max_j)
-    int n_in_map = 2; guide_tree[0] = max_j, guide_tree[1] = max_i;
-
+    max_sim.resize(seqs_size);
+    int n_in_map = 2; guide_tree[0] = max_i, guide_tree[1] = max_j;
+    max_sim[max_j] = max_i;
     // then, pick one with biggest jac sum with existing sequence in guide_tree
     while (n_in_map < seqs_size) {
       // std::cerr << n_in_map << " " << seqs_size << "\n";
-      max_jac = -1.0, max_i = seqs_size;
-      for (rid1 = 0; rid1 < seqs_size; ++rid1) {
+      max_jac = -1.0, max_j = seqs_size;
+      for (rid2 = 0; rid2 < seqs_size; ++rid2) {
         jac = 0.0;
         for (i = 0; i < (size_t)n_in_map; ++i) {
-          rid2 = guide_tree[i];
+          rid1 = guide_tree[i];
           if (rid1 == rid2) { jac = -1.0; break; }
-          else if (rid1 > rid2) jac += jac_sim[((rid1 * (rid1 - 1)) >> 1) + rid2];
-          else jac += jac_sim[((rid2 * (rid2 - 1)) >> 1) + rid1];
+          // jac = std::max(jac, jac_sim[rid2 * seqs_size + rid1]);
+          jac += jac_sim[rid1 * seqs_size + rid2];
         }
         if (jac > max_jac) {
           max_jac = jac;
+          max_j = rid2;
+        }
+      }
+      max_i = -1;jac = 0.0;
+      for (i = 0; i < (size_t)n_in_map; ++i) {
+        rid1 = guide_tree[i];
+        if (max_j == rid1) { jac = -1.0; continue; }
+        // jac = std::max(jac, jac_sim[rid2 * seqs_size + rid1]);
+        if (max_i == -1 || jac < jac_sim[rid1 * seqs_size + max_j]) {
+          jac = jac_sim[rid1 * seqs_size + max_j];
           max_i = rid1;
         }
       }
+      max_sim[max_j] = max_i;
+      std::cerr << jac << " " << max_sim[max_j] << " " << max_j << "\n";
       if (max_i == seqs_size) {
         std::cerr << __func__ << "Bug in progressive tree building. (2)" << "\n";
         exit(EXIT_FAILURE);
       }
-      guide_tree[n_in_map++] = max_i;
+      guide_tree[n_in_map++] = max_j;
     }
+    // // calculate jaccard similarity between each two sequences
+    // double* jac_sim = (double*)calloc((seqs_size * (seqs_size - 1)) >> 1, sizeof(double));
+    // // 0: 
+    // // 1: 0 
+    // // 2: 0 1 
+    // double max_jac = -1.0, jac; int max_i = -1, max_j = -1;
+    // for (i = 1; i < (size_t)seqs_size; ++i) {
+    //   for (j = 0; j < i; ++j) {
+    //     int tot_n = mm_hit_n[((i * (i + 1)) >> 1) + i] + mm_hit_n[((j * (j + 1)) >> 1) + j] - mm_hit_n[((i * (i + 1)) >> 1) + j];
+    //     if (tot_n == 0) jac = 0;
+    //     else if (tot_n < 0) {
+    //       std::cerr << __func__ << "Bug in progressive tree building. (1)" << "\n";
+    //       exit(EXIT_FAILURE);
+    //     }
+    //     else jac = (0.0 + mm_hit_n[((i * (i + 1)) >> 1) + j]) / tot_n;
+    //     jac_sim[((i * (i - 1)) >> 1) + j] = jac; // jac_sim[i][j] = jac_sim[i*(i-1)/2 + j]
+    //     if (jac > max_jac) {
+    //       max_jac = jac; max_i = i, max_j = j;
+    //     }
+    //   }
+    // }
+
+    // // std::cerr << max_jac << " " << max_i << " " << max_j << "\n";
+    // // build guide tree
+    // // first pick two with the biggest jac (max_i, max_j)
+    // int n_in_map = 2; guide_tree[0] = max_j, guide_tree[1] = max_i;
+
+    // // then, pick one with biggest jac sum with existing sequence in guide_tree
+    // while (n_in_map < seqs_size) {
+    //   // std::cerr << n_in_map << " " << seqs_size << "\n";
+    //   max_jac = -1.0, max_i = seqs_size;
+    //   for (rid1 = 0; rid1 < seqs_size; ++rid1) {
+    //     jac = 0.0;
+    //     for (i = 0; i < (size_t)n_in_map; ++i) {
+    //       rid2 = guide_tree[i];
+    //       if (rid1 == rid2) { jac = -1.0; break; }
+    //       else if (rid1 > rid2) jac += jac_sim[((rid1 * (rid1 - 1)) >> 1) + rid2];
+    //       else jac += jac_sim[((rid2 * (rid2 - 1)) >> 1) + rid1];
+    //     }
+    //     if (jac > max_jac) {
+    //       max_jac = jac;
+    //       max_i = rid1;
+    //     }
+    //   }
+    //   if (max_i == seqs_size) {
+    //     std::cerr << __func__ << "Bug in progressive tree building. (2)" << "\n";
+    //     exit(EXIT_FAILURE);
+    //   }
+    //   guide_tree[n_in_map++] = max_i;
+    // }
 
     free(mm_hit_n); free(jac_sim);
     // if (abpt->verbose >= ABPOA_INFO_VERBOSE) fprintf(stderr, "done!\n");
