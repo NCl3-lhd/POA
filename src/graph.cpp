@@ -108,6 +108,7 @@ void graph::init(para_t* para, int seq_id, const std::string& str) {
   node.clear();
   node.emplace_back(node_t(node.size(), char26_table['N'], para_m)); // src 0
   node.emplace_back(node_t(node.size(), char26_table['N'], para_m)); // sink 1
+  // node_h.emplace_back(node.size());
   int pre_id = 0;
   for (int i = 0; i < str.size(); i++) {
     int cur_id = node.size();
@@ -119,7 +120,8 @@ void graph::init(para_t* para, int seq_id, const std::string& str) {
   topsort(0, para_f);
 }
 void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int graph_node_num) {
-  int anchored_id = 1; // sink
+  // node_h.emplace_back(node.size());
+  int anchored_id = -1; // sink
   // std::cerr << seq_id << " " << res.size() << "\n";
   for (int i = 0; i < res.size(); i++) {
     int cur_id = res[i].from;
@@ -131,12 +133,12 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
           node.emplace_back(node_t(cur_id, res[i].base, para_m));
           node[res[i].aligned_id].aligned_node[res[i].base] = cur_id;
           node[cur_id].par_id = res[i].aligned_id;
-          add_adj(seq_id, cur_id, anchored_id);
+          if (anchored_id != -1) add_adj(seq_id, anchored_id, cur_id);
         }
         else {
           // std::cerr << 2 << "\n";
           cur_id = node[res[i].aligned_id].aligned_node[res[i].base];
-          add_adj(seq_id, cur_id, anchored_id);
+          if (anchored_id != -1) add_adj(seq_id, anchored_id, cur_id);
         }
       }
       else {
@@ -160,7 +162,7 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
           cur_id = node.size();
           node.emplace_back(node_t(cur_id, res[i].base, para_m));
         }
-        add_adj(seq_id, cur_id, anchored_id);
+        if (anchored_id != -1) add_adj(seq_id, anchored_id, cur_id);
       }
       // std::cout << cur_id << " " << char256_table[res[i].base] << "  " << anchored_id << "\n";
     }
@@ -168,10 +170,11 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
       // std::cerr << 4 << "\n";
       // std::cerr << node.size() << " " << cur_id << " " << anchored_id << "\n";
       // std::cout << cur_id << " " << char256_table[res[i].base] << "  " << anchored_id << "\n";
-      add_adj(seq_id, cur_id, anchored_id);
+      if (anchored_id != -1) add_adj(seq_id, anchored_id, cur_id);
     }
     anchored_id = cur_id;
   }
+  add_adj(seq_id, anchored_id, 1); // anchored -> sink
   // std::cerr << "finish add path" << "\n";
 }
 

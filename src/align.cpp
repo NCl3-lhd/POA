@@ -5,7 +5,6 @@
 #include <cstring>
 #include <chrono>
 
-
 #if __AVX512BW__
 constexpr size_t SIMDTotalBytes = 64;
 using reg = __m512i;
@@ -19,7 +18,7 @@ using reg = __m128i;
 constexpr int reg_size = SIMDTotalBytes / sizeof(int); // number of int in reg
 
 constexpr int INF = 0x3f3f3f3f; // 0x3f3f3f3f
-constexpr int NEG_INF = 0xc0c0c0c0; //
+constexpr int NEG_INF = 0xc0c0c0c0; // 0xc0c0c0c0
 constexpr int M_OP = 1, D_OP = 2, I_OP = 4, ALL_OP = 7;
 
 inline int calj(int acj, int Bs) {
@@ -144,7 +143,7 @@ std::vector<res_t> POA(para_t* para, const graph& DAG, const std::string& seq) {
   return res;
 };
 
-std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t* mm, const std::string& _seq, aligned_buff_t* mpool) {
+std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t* mm, int rid, const std::string& _seq, aligned_buff_t* mpool) {
   // std::chrono::microseconds total_part1(0);
   // std::chrono::microseconds total_part2(0);
   // std::chrono::microseconds total_part3(0);
@@ -166,6 +165,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
   std::vector<int> Bs(n), Be(n);  // index is rank    [Bs[i], Be[i] - 1)  Be[i] - 1 's block is Neg_inf is designed for M direciton dp
   size_t mtx_size = 0;
   const int w = para->b + m / para->f;
+
   size_t sum = 0;
   for (int i = 0; i < n; i++) {
     Ms[i] = std::max(0, std::min(DAG->hlen[i], m - DAG->tlen[i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[i], m - DAG->tlen[i]) + w);
@@ -188,6 +188,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
   M[0] = (int*)buff;
   D[0] = M[0] + mtx_size;
   I[0] = D[0] + mtx_size;
+
   for (int i = 1; i < n; i++) {
     int offset = (Be[i - 1] - Bs[i - 1]) * reg_size;
     M[i] = M[i - 1] + offset;
@@ -229,11 +230,14 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
   // std::cerr << "node:" << node.size() << "\n";
   // std::cerr << "path len:" << DAG->hlen[node[1].rank] << " " << DAG->tlen[node[0].rank] << "\n";
   // std::cerr << "m:" << m << "\n";
+  // int mm_h_idx = mm->mm_h[rid];
   for (int i = 1; i < n; i++) {
     const node_t& cur = node[rank[i]];
     int* M_i = M[i];
     int* D_i = D[i];
+    // updata Me[i], MS[i], Be[i], Bs[i] by offset
     int block_num = Be[i] - Bs[i] - 1; // not contain Be[i] - 1 's block
+    sum += Me[i] - Ms[i] + 1;
     // tot += cur.in.size();
     // Bs[i] = std::max(0, std::min(Ms[i], m - R[i]) - w), Be[i] = std::min(m, std::max(Me[i], m - R[i]) + w); // [Bs,Be]
     // int tbs = std::max(0, std::min(DAG->hlen[i], m - DAG->tlen[i]) - w), tbe = std::min(m, std::max(DAG->hlen[i], m - DAG->tlen[i]) + w);
@@ -242,7 +246,6 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
     // int tbs = std::max(0, std::min(DAG->hmin[i], m - DAG->tmax[i]) - w), tbe = std::min(m, std::max(DAG->hmax[i], m - DAG->tmin[i]) + w);
     // std::cerr << m << " " << Bs[i] << " " << Be[i] << "\n";
     // block_s = Bs[i] / reg_size, block_e = Be[i] / reg_size + 1; // [block_s,block_e)
-    sum += Me[i] - Ms[i] + 1;
     // std::cerr << "B:" << m << " " << w << " " << tbs << " " << tbe << '\n';
     auto start2 = std::chrono::high_resolution_clock::now();
     for (int k = 0; k < cur.in.size(); k++) {
@@ -311,7 +314,49 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
     for (int j = 1; j < block_num * reg_size; j++) { // block_num * reg_size
       I_i[j] = std::max(I_i[j - 1] + e1, M_i[j - 1] + o1); // isource
       M_i[j] = std::max({ M_i[j], D_i[j], I_i[j] });  // three source
-      // max_pos = (max_pos == -1 || M_i[j] > M_i[max_pos]) ? j : max_pos;
+    }
+
+    if (para->enable_seeding) {
+      int max_j = 0;
+      for (int j = 1; j < block_num* reg_size; j++) { // block_num * reg_size
+        max_j = M_i[j] > M_i[max_j] ? j : max_j;
+      }
+      int max_acj = Bs[i] * reg_size + max_j;
+      bool is_M_OP = false;
+      for (int k = 0; k < cur.in.size(); k++) {
+        int p = node[cur.in[k]].rank; // rank
+        const node_t& pre = node[cur.in[k]];
+        if (pre.base != seq[max_acj - 1]) continue;
+        // M
+        int pj = calj(max_acj, Bs[p]);
+        // if (ans == 5114 && pj - 1 >= 0) 
+          // std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
+        if (pj - 1 >= 0 && M[i][max_j] == M[p][pj - 1] + match) {
+          is_M_OP = true;
+          break;
+        }
+      }
+      if (is_M_OP && i < n - 1) {
+        // match minimizer
+        // std::cerr << cur.id << " " << char256_table[cur.base] << " " << "M source" << "\n";
+        mm128_t seed = mm->find_mm(rid, max_acj - 2);  // mm_h_idx will be updated to the next idx needed match 
+        if (((seed.y >> 1) & 0x7FFFFFFF) == max_acj - 2) {
+          // std::cerr << cur.id << " " << max_acj - 2 << " " << seed.x << "\n";
+          bool isAnchored = false;
+          // try max_similary mm
+          mm128_t seed_g = mm->match_mm(seed.x, mm->max_sim[rid]);
+          if (seed_g.x == seed.x) { //&& pos[rid][(seed_g.y >> 1) & 0x7FFFFFFF)] >= cur.id
+            std::cerr << "anchored" << "\n";
+            tot++;
+          }
+          // for() cur.ids;
+          // update offset
+          //
+
+        }
+
+      }
+
     }
     // if (debug) {
     //   // for (int j = std::max(1, block_s * reg_size); j < block_e * reg_size; j++) {
@@ -326,6 +371,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
     //   Ms[suc] = std::min(Ms[suc], max_pos + 1), Me[suc] = std::max(Me[suc], max_pos + 1);
     // }
   }
+  std::cerr << "anchor num:" << tot << "\n";
 
   // std::cerr << "avg pre size:" << tot / n << "\n";
   // std::cerr << "部分1总耗时: " << total_part1.count() / 1000 << " ms\n";
@@ -335,7 +381,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
   int ans = M[i][calj(acj, Bs[i])];
   // std::cout << "M:\n";
   // for (int i = 0; i < n; i++) {
-  //   std::cout << "Be:" << Bs[i] << " " << Be[i] << "\n";
+  //   std::cout << i << ":" << "\n";
   //   for (int j = 0; j < Be[i] * reg_size; j++) {
   //     std::cout << M[i][j] << " ";
   //   }
@@ -624,6 +670,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
   // std::cerr << "finish" << "\n";
   // std::cout << "sorce:" << M[n - 1][m] << "\n";
   if (mpool == nullptr) free_aligned(buff);
+  std::reverse(res.begin(), res.end());
   return res;
 }
 

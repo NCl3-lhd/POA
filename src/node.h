@@ -8,7 +8,8 @@ struct node_t {
   unsigned char base;
   std::vector<int> in, in_weight, out, out_weight;
   std::vector<int> aligned_node;
-  std::vector<int> ids;
+  std::vector<int> ids; // restore the ord[rid]
+  std::vector<int> idpos;
   node_t();
   node_t(int _id, unsigned char _base, int m) {
     base = _base;

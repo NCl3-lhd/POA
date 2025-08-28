@@ -9,6 +9,7 @@
 struct graph {
   // 成员声明
   std::vector<node_t> node; //index is id
+  // std::vector<int> node_h;  //index is ord[id] 
   std::vector<int> rank; // rank_to_node_id
   std::vector<int> hmin, hmax, tmin, tmax;  // index is rank  haid tail
   std::vector<int> hlen, tlen;  // index is rank  haid tail

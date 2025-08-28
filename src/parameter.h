@@ -8,6 +8,7 @@ struct para_t {
   int match, mismatch, gap_open1, gap_open2, gap_ext1, gap_ext2; int inf_min;
   int b, f;// adband
   int k, w;// k-mer
+  bool enable_seeding;
   bool progressive_poa;
 };
 #endif

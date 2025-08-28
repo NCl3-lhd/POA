@@ -100,6 +100,7 @@ void mm_sketch(void* km, const char* str, int len, int w, int k, uint32_t rid, i
       if (l >= k && kmer_span < 256) {
         // std::cerr << rid << " " << z << " " << kmer[z] << " " << i << "\n";
         info.x = hash64(kmer[z], mask) << 8 | kmer_span;
+        // std::cerr << info.x << "\n";
         info.y = (uint64_t)rid << 32 | (uint32_t)i << 1 | z;
       }
     }
@@ -159,6 +160,7 @@ minimizer_t::minimizer_t(para_t* para, const std::vector<seq_t>& seqs) {
 void minimizer_t::init(para_t* para, const std::vector<seq_t>& seqs) {
   km = km_init();
   mm_v = { 0, 0, nullptr };
+  sorted_mm_v = { 0, 0, nullptr };
   seqs_size = seqs.size();
   maxl = 0;
   // std::cerr << "111 " << "\n";
@@ -170,18 +172,31 @@ void minimizer_t::init(para_t* para, const std::vector<seq_t>& seqs) {
   // std::cerr << "collect_mm" << "\n";
   mm_h = (int*)malloc((seqs_size + 1) * sizeof(int));
   collect_mm(km, seqs, para);//mm ->Minimizer
+
+  if (para->enable_seeding) {
+    for (int i = 0; i < (int)mm_v.n; ++i) kv_push(mm128_t, km, sorted_mm_v, mm_v.a[i]);
+    for (int i = 0; i < seqs_size; i++) {
+      radix_sort_mm128x(sorted_mm_v.a + mm_h[i], sorted_mm_v.a + mm_h[i + 1]); // sort mm by k-mer hash values
+      for (int j = mm_h[i]; j < mm_h[i + 1]; j++) {
+        std::cerr << mm_v.a[j].x << " " << ((mm_v.a[j].y >> 1) & 0x7FFFFFFF) << " ";
+      }
+      std::cerr << "\n";
+    }
+  }
+  std::cerr << "enable_seeding" << "\n";
   // std::cerr << "finish collect_mm" << "\n";
 };
-std::vector<int> minimizer_t::get_guide_tree(para_t* para) {
-  std::vector<int> guide_tree(seqs_size);
-  std::iota(guide_tree.begin(), guide_tree.end(), 0);
-  if (para->progressive_poa && seqs_size > 2) {
+void minimizer_t::get_guide_tree(para_t* para) {
+  ord.resize(seqs_size);
+  std::iota(ord.begin(), ord.end(), 0);
+  if (para->progressive_poa && seqs_size >= 2) {
     // copy mm1 to mm2
     mm128_v mm_tv = { 0, 0, nullptr };
     for (int i = 0; i < (int)mm_v.n; ++i) kv_push(mm128_t, km, mm_tv, mm_v.a[i]);
     // use mm2 to build guide tree
     if (mm_tv.n == 0) {
-      return guide_tree;
+      // return ord;
+      return;
     }
 
     // if (abpt->verbose >= ABPOA_INFO_VERBOSE) fprintf(stderr, "[%s] Building progressive guide tree ... ", __func__);
@@ -234,7 +249,7 @@ std::vector<int> minimizer_t::get_guide_tree(para_t* para) {
     }
     free(mm_cnt);
     // calculate jaccard similarity between each two sequences
-    std::cerr << "flag" << "\n";
+    // std::cerr << "flag" << "\n";
     double* jac_sim = (double*)calloc((seqs_size * (seqs_size)), sizeof(double));
     // 0: 
     // 1: 0 
@@ -266,16 +281,16 @@ std::vector<int> minimizer_t::get_guide_tree(para_t* para) {
     // build guide tree
     // first pick two with the biggest jac (max_i, max_j)
     max_sim.resize(seqs_size);
-    int n_in_map = 2; guide_tree[0] = max_i, guide_tree[1] = max_j;
+    int n_in_map = 2; ord[0] = max_i, ord[1] = max_j;
     max_sim[max_j] = max_i;
-    // then, pick one with biggest jac sum with existing sequence in guide_tree
+    // then, pick one with biggest jac sum with existing sequence in ord
     while (n_in_map < seqs_size) {
       // std::cerr << n_in_map << " " << seqs_size << "\n";
       max_jac = -1.0, max_j = seqs_size;
       for (rid2 = 0; rid2 < seqs_size; ++rid2) {
         jac = 0.0;
         for (i = 0; i < (size_t)n_in_map; ++i) {
-          rid1 = guide_tree[i];
+          rid1 = ord[i];
           if (rid1 == rid2) { jac = -1.0; break; }
           // jac = std::max(jac, jac_sim[rid2 * seqs_size + rid1]);
           jac += jac_sim[rid1 * seqs_size + rid2];
@@ -287,7 +302,7 @@ std::vector<int> minimizer_t::get_guide_tree(para_t* para) {
       }
       max_i = -1;jac = 0.0;
       for (i = 0; i < (size_t)n_in_map; ++i) {
-        rid1 = guide_tree[i];
+        rid1 = ord[i];
         if (max_j == rid1) { jac = -1.0; continue; }
         // jac = std::max(jac, jac_sim[rid2 * seqs_size + rid1]);
         if (max_i == -1 || jac < jac_sim[rid1 * seqs_size + max_j]) {
@@ -301,7 +316,7 @@ std::vector<int> minimizer_t::get_guide_tree(para_t* para) {
         std::cerr << __func__ << "Bug in progressive tree building. (2)" << "\n";
         exit(EXIT_FAILURE);
       }
-      guide_tree[n_in_map++] = max_j;
+      ord[n_in_map++] = max_j;
     }
     // // calculate jaccard similarity between each two sequences
     // double* jac_sim = (double*)calloc((seqs_size * (seqs_size - 1)) >> 1, sizeof(double));
@@ -328,16 +343,16 @@ std::vector<int> minimizer_t::get_guide_tree(para_t* para) {
     // // std::cerr << max_jac << " " << max_i << " " << max_j << "\n";
     // // build guide tree
     // // first pick two with the biggest jac (max_i, max_j)
-    // int n_in_map = 2; guide_tree[0] = max_j, guide_tree[1] = max_i;
+    // int n_in_map = 2; ord[0] = max_j, ord[1] = max_i;
 
-    // // then, pick one with biggest jac sum with existing sequence in guide_tree
+    // // then, pick one with biggest jac sum with existing sequence in ord
     // while (n_in_map < seqs_size) {
     //   // std::cerr << n_in_map << " " << seqs_size << "\n";
     //   max_jac = -1.0, max_i = seqs_size;
     //   for (rid1 = 0; rid1 < seqs_size; ++rid1) {
     //     jac = 0.0;
     //     for (i = 0; i < (size_t)n_in_map; ++i) {
-    //       rid2 = guide_tree[i];
+    //       rid2 = ord[i];
     //       if (rid1 == rid2) { jac = -1.0; break; }
     //       else if (rid1 > rid2) jac += jac_sim[((rid1 * (rid1 - 1)) >> 1) + rid2];
     //       else jac += jac_sim[((rid2 * (rid2 - 1)) >> 1) + rid1];
@@ -351,7 +366,7 @@ std::vector<int> minimizer_t::get_guide_tree(para_t* para) {
     //     std::cerr << __func__ << "Bug in progressive tree building. (2)" << "\n";
     //     exit(EXIT_FAILURE);
     //   }
-    //   guide_tree[n_in_map++] = max_i;
+    //   ord[n_in_map++] = max_i;
     // }
 
     free(mm_hit_n); free(jac_sim);
@@ -359,10 +374,58 @@ std::vector<int> minimizer_t::get_guide_tree(para_t* para) {
 
     kfree(km, mm_tv.a);
   }
-  return guide_tree;
+  // return ord;
 };
 
 minimizer_t::~minimizer_t() {
-  kfree(km, mm_v.a); free(mm_h); km_destroy(km);
+  kfree(km, mm_v.a);kfree(km, sorted_mm_v.a); free(mm_h); km_destroy(km);
 }
 /************ end *************/
+
+
+mm128_t minimizer_t::find_mm(int rid, int tarPos) const {
+  mm128_t res = { UINT64_MAX, UINT64_MAX };
+  int l = mm_h[rid], r = mm_h[rid + 1];
+  while (l + 1 < r) {
+    int mid = (l + r) / 2;
+    int curPos = (mm_v.a[mid].y >> 1) & 0x7FFFFFFF;
+    if (curPos <= tarPos) {
+      l = mid;
+    }
+    else {
+      r = mid;
+    }
+  }
+  return mm_v.a[l];
+};
+
+mm128_t minimizer_t::find_mm(int& idx, int rid, int tarPos) const {
+  mm128_t res = { UINT64_MAX, UINT64_MAX };
+  if (tarPos < 0) return res;
+  while (idx < mm_h[rid + 1]) {
+    int curPos = (mm_v.a[idx].y >> 1) & 0x7FFFFFFF;
+    // std::cerr << curPos << " " << mm_v.a[idx].x << "\n";
+    if (curPos > tarPos) break;
+    if (curPos == tarPos) {
+      res = mm_v.a[idx];
+    }
+    idx++;
+  };
+  return res;
+};
+mm128_t minimizer_t::match_mm(uint64_t mm_x, int rid) const {
+  // if (mm_x == 2314759) {
+  //   for 
+  // }
+  int l = mm_h[rid], r = mm_h[rid + 1];
+  while (l + 1 < r) {
+    int mid = (l + r) / 2;
+    if (sorted_mm_v.a[mid].x <= mm_x) {
+      l = mid;
+    }
+    else {
+      r = mid;
+    }
+  }
+  return sorted_mm_v.a[l];
+};
