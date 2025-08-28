@@ -2,12 +2,13 @@
 #include "sequence.h"
 #include <queue>
 extern char char26_table[256];
-void graph::add_adj(int seq_id, int from, int to) {
+void graph::add_adj(int seq_id, int from, int to, int curPos) {
   // from and to node actually exist
   // std::cout << from << " " << to << "\n";
   if (from == to) return; // self loop is error
+  // std::cerr << seq_id << " " << from << " " << to << " " << curPos << "\n";
   node[from].add_out_adj(seq_id, to);
-  node[to].add_in_adj(seq_id, from);
+  node[to].add_in_adj(seq_id, from, curPos);
 }
 void graph::topsort(int op, int para_f) { // if op == 1, is not normal topsort, the node_id in queue must be the parent
   std::vector<int> stk;
@@ -110,19 +111,21 @@ void graph::init(para_t* para, int seq_id, const std::string& str) {
   node.emplace_back(node_t(node.size(), char26_table['N'], para_m)); // sink 1
   // node_h.emplace_back(node.size());
   int pre_id = 0;
+  // std::cerr << " " << str.size() << "\n";
   for (int i = 0; i < str.size(); i++) {
     int cur_id = node.size();
     node.emplace_back(node_t(cur_id, char26_table[str[i]], para_m)); // str[i]
-    add_adj(seq_id, pre_id, cur_id);
+    add_adj(0, pre_id, cur_id, i);
     pre_id = cur_id;
   }
-  add_adj(seq_id, pre_id, 1); // 
+  add_adj(0, pre_id, 1, str.size()); // 
   topsort(0, para_f);
 }
 void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int graph_node_num) {
   // node_h.emplace_back(node.size());
   int anchored_id = -1; // sink
   // std::cerr << seq_id << " " << res.size() << "\n";
+  int curPos = 0;
   for (int i = 0; i < res.size(); i++) {
     int cur_id = res[i].from;
     if (cur_id < 0) {
@@ -133,12 +136,12 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
           node.emplace_back(node_t(cur_id, res[i].base, para_m));
           node[res[i].aligned_id].aligned_node[res[i].base] = cur_id;
           node[cur_id].par_id = res[i].aligned_id;
-          if (anchored_id != -1) add_adj(seq_id, anchored_id, cur_id);
+          if (anchored_id != -1) add_adj(seq_id, anchored_id, cur_id, curPos++);
         }
         else {
           // std::cerr << 2 << "\n";
           cur_id = node[res[i].aligned_id].aligned_node[res[i].base];
-          if (anchored_id != -1) add_adj(seq_id, anchored_id, cur_id);
+          if (anchored_id != -1) add_adj(seq_id, anchored_id, cur_id, curPos++);
         }
       }
       else {
@@ -162,7 +165,7 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
           cur_id = node.size();
           node.emplace_back(node_t(cur_id, res[i].base, para_m));
         }
-        if (anchored_id != -1) add_adj(seq_id, anchored_id, cur_id);
+        if (anchored_id != -1) add_adj(seq_id, anchored_id, cur_id, curPos++);
       }
       // std::cout << cur_id << " " << char256_table[res[i].base] << "  " << anchored_id << "\n";
     }
@@ -170,15 +173,15 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
       // std::cerr << 4 << "\n";
       // std::cerr << node.size() << " " << cur_id << " " << anchored_id << "\n";
       // std::cout << cur_id << " " << char256_table[res[i].base] << "  " << anchored_id << "\n";
-      if (anchored_id != -1) add_adj(seq_id, anchored_id, cur_id);
+      if (anchored_id != -1) add_adj(seq_id, anchored_id, cur_id, curPos++);
     }
     anchored_id = cur_id;
   }
-  add_adj(seq_id, anchored_id, 1); // anchored -> sink
+  add_adj(seq_id, anchored_id, 1, curPos); // anchored -> sink
   // std::cerr << "finish add path" << "\n";
 }
 
-void graph::output_rc_msa(const std::vector<seq_t>& seqs) {
+void graph::output_rc_msa(const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs) {
   // std::cerr << seqs.size() << " " << rank.size() << "\n";
   std::vector<std::string> res(seqs.size(), std::string(rank.size() - 2, '-'));
   for (int i = 0; i < node.size(); i++) {
@@ -188,8 +191,9 @@ void graph::output_rc_msa(const std::vector<seq_t>& seqs) {
     }
   }
   for (int i = 0; i < seqs.size(); i++) {
+    // std::cerr << rid_to_ord[i] << "\n";
     std::cout << ">" << seqs[i].name << " " << seqs[i].comment << "\n";
-    std::cout << res[i] << "\n";
+    std::cout << res[rid_to_ord[i]] << "\n";
   }
 }
 std::vector<int> graph::calculateR() const {

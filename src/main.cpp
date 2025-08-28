@@ -86,19 +86,16 @@ int main(int argc, char** argv) {
   // std::sort(ord.begin(), ord.end(), [&](const int& i, const int& j) {
   //   return  seqs[i].seq.size() > seqs[j].seq.size();
   // });
-  minimizer_t* mm = nullptr;
-  if (para->progressive_poa) {
+  minimizer_t* mm = new minimizer_t(para, seqs);
+  if (para->progressive_poa || para->enable_seeding) {
     std::cerr << "progressive_poa" << "\n";
-    mm = new minimizer_t(para, seqs);
     mm->get_guide_tree(para);
     // std::reverse(ord.begin(), ord.end());
     // for (int i = 0; i < seqs.size(); i++) {
     //   std::cerr << ord[i] << "\n";
     // }
   }
-  std::vector<int> ord(seqs.size());
-  std::iota(ord.begin(), ord.end(), 0);
-  if (para->progressive_poa) ord = mm->ord;
+  const std::vector<int>& ord = mm->ord;
   // std::cerr << mm.mm_v.n << "\n";
 
 
@@ -129,13 +126,13 @@ int main(int argc, char** argv) {
       std::vector<res_t> res = para->f ? abPOA(para, DAG, mm, rid, tseq, &mpool) : POA_SIMD_ORIGIN(para, DAG, tseq, &mpool);
       // return 0;
       // std::cerr << "add_path" << "\n";
-      DAG->add_path(para->m, rid, res);
+      DAG->add_path(para->m, i, res);
       // std::cerr << "topsort" << "\n";
       DAG->topsort(i + 1 == seqs.size(), para->f);
       // std::cout << i << " " << DAG->rank.size() << "\n";
     }
     // handle output 
-    DAG->output_rc_msa(seqs);
+    DAG->output_rc_msa(mm->rid_to_ord, seqs);
     // std::cerr << minl << " " << maxl << '\n';
   }
   else {
@@ -161,7 +158,7 @@ int main(int argc, char** argv) {
       std::vector<res_t> res = para->f ? abPOA(para, DAG, mm, rid, tseq, &mpool[0]) : POA_SIMD_ORIGIN(para, DAG, tseq, &mpool[0]);
       // return 0;
       // std::cerr << "add_path" << "\n";
-      DAG->add_path(para->m, rid, res);
+      DAG->add_path(para->m, i, res);
       // std::cerr << "topsort" << "\n";
       DAG->topsort(i + 1 == seqs.size(), para->f);
     }
@@ -194,7 +191,7 @@ int main(int argc, char** argv) {
       int node_num = DAG->node.size();
       for (int j = 0; j < res.size(); j++) {
         rid = ord[i + j];
-        DAG->add_path(para->m, rid, res[j], node_num);
+        DAG->add_path(para->m, i + j, res[j], node_num);
       }
       // std::cerr << "topsort:" << "\n";
       DAG->topsort(i + thread >= seqs.size(), para->f);
@@ -208,7 +205,7 @@ int main(int argc, char** argv) {
     }
     // handle output 
     // std::cerr << "output" << '\n';
-    DAG->output_rc_msa(seqs);
+    DAG->output_rc_msa(mm->rid_to_ord, seqs);
     // std::cerr << "delete" << "\n";
     delete[] mpool;
     // std::cerr << "finish" << "\n";
@@ -234,6 +231,5 @@ int main(int argc, char** argv) {
   DAG = nullptr;  // 防止后续误用
   delete mm;
   mm = nullptr;  // 防止后续误用
-
   return 0;
 }

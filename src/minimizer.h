@@ -16,6 +16,7 @@ struct minimizer_t {
   mm128_v mm_v, sorted_mm_v;
   std::vector<int> max_sim; // is seq_id;
   std::vector<int> ord; // index is rid
+  std::vector<int> rid_to_ord; // index is ord rid -> ord
   minimizer_t(para_t* para, const std::vector<seq_t>& seqs);
   ~minimizer_t();
   void init(para_t* para, const std::vector<seq_t>& seqs);
