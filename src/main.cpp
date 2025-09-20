@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
   // });
   minimizer_t* mm = new minimizer_t(para, seqs);
   if (para->progressive_poa || para->enable_seeding) {
-    std::cerr << "progressive_poa" << "\n";
+    std::cerr << "progressive" << "\n";
     mm->get_guide_tree(para);
     // std::reverse(ord.begin(), ord.end());
     // for (int i = 0; i < seqs.size(); i++) {
@@ -102,6 +102,7 @@ int main(int argc, char** argv) {
   // for (int i = 0; i < seqs.size(); i++) {
   //   std::cout << i << " " << ord[i] << " " << seqs[ord[i]].seq.size() << "\n";
   // }
+  std::cerr << "poa" << "\n";
   int rid = ord[0];
   DAG->init(para, rid, seqs[rid].seq);
   // seqs[0].seq = "TTGCCCTT";
@@ -123,7 +124,7 @@ int main(int argc, char** argv) {
       // POA_SIMD(para, DAG, tseq);
       // std::vector<res_t> res = POA(para, DAG, tseq);
       // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
-      std::vector<res_t> res = para->f ? abPOA(para, DAG, mm, rid, tseq, &mpool) : POA_SIMD_ORIGIN(para, DAG, tseq, &mpool);
+      std::vector<res_t> res = abPOA(para, DAG, mm, rid, tseq, &mpool);
       // return 0;
       // std::cerr << "add_path" << "\n";
       DAG->add_path(para->m, i, res);
@@ -155,7 +156,7 @@ int main(int argc, char** argv) {
       // POA_SIMD(para, DAG, tseq);
       // std::vector<res_t> res = POA(para, DAG, tseq);
       // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
-      std::vector<res_t> res = para->f ? abPOA(para, DAG, mm, rid, tseq, &mpool[0]) : POA_SIMD_ORIGIN(para, DAG, tseq, &mpool[0]);
+      std::vector<res_t> res = abPOA(para, DAG, mm, rid, tseq, &mpool[0]);
       // return 0;
       // std::cerr << "add_path" << "\n";
       DAG->add_path(para->m, i, res);
@@ -179,7 +180,7 @@ int main(int argc, char** argv) {
           for (int j = 0; j < seq_i.size(); j++) {
             tseq += char26_table[seq_i[j]];
           }
-          std::vector<res_t> res = para->f ? abPOA(para, DAG, mm, rid, tseq, cur_mpool) : POA_SIMD_ORIGIN(para, DAG, tseq, cur_mpool);
+          std::vector<res_t> res = abPOA(para, DAG, mm, rid, tseq, cur_mpool);
           return res;
         }));
       }

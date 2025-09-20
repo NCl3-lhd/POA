@@ -164,19 +164,20 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
   std::vector<int> Ms(n, m + 1), Me(n); // index is rank  [Ms[i], Me[i]]
   std::vector<int> Bs(n), Be(n);  // index is rank    [Bs[i], Be[i] - 1)  Be[i] - 1 's block is Neg_inf is designed for M direciton dp
   size_t mtx_size = 0;
-  int w = para->b + m / para->f;
-
+  int w = para->b;
+  if (para->f) w += m / para->f;
+  int reserved_reg_size = 2;
+  if (para->enable_seeding) reserved_reg_size = std::max(reserved_reg_size, std::max(10, (w + reg_size - 1) / reg_size));
   size_t sum = 0;
   for (int i = 0; i < n; i++) {
-    Ms[i] = 0, Me[i] = m;
-    // if (para->f > 0) {
-    //   Ms[i] = std::max(0, std::min(DAG->hlen[i], m - DAG->tlen[i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[i], m - DAG->tlen[i]) + w);
-
-    // }
-    // else {
-    //   Ms[i] = 0, Me[i] = m;
-    // }
-    Bs[i] = Ms[i] / reg_size, Be[i] = Me[i] / reg_size + 2; // [block_s,block_e)
+    // Ms[i] = 0, Me[i] = m;
+    if (para->f > 0 && !para->enable_seeding) {
+      Ms[i] = std::max(0, std::min(DAG->hlen[i], m - DAG->tlen[i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[i], m - DAG->tlen[i]) + w);
+    }
+    else {
+      Ms[i] = 0, Me[i] = m;
+    }
+    Bs[i] = Ms[i] / reg_size, Be[i] = Me[i] / reg_size + reserved_reg_size; // [block_s,block_e)
     mtx_size += (Be[i] - Bs[i]) * reg_size;
     // sum += Me[i] - Ms[i] + 1;
   }
@@ -213,10 +214,11 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
 
   // return std::vector<res_t>();
   // int block_s = Bs[0] / reg_size, block_e = Be[0] / reg_size + 1; // [block_s,block_e)
-  for (int i = 0; i < n; i++) {
-    Ms[i] = std::max(0, std::min(DAG->hlen[i], m - DAG->tlen[i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[i], m - DAG->tlen[i]) + w);
-    Bs[i] = Ms[i] / reg_size, Be[i] = Me[i] / reg_size + 2; // [block_s,block_e)
-  }
+  // for (int i = 0; i < n; i++) {
+  //   Ms[i] = std::max(0, std::min(DAG->hlen[i], m - DAG->tlen[i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[i], m - DAG->tlen[i]) + w);
+  //   Bs[i] = Ms[i] / reg_size, Be[i] = Me[i] / reg_size + reserved_reg_size; // [block_s,block_e)
+  // }
+  // std::cerr << w << "\n";
   for (int bid = Bs[0]; bid < Be[0]; bid++) {
     // memset(M, 0xc0, col_size * sizeof(int));//M[0] = NEG_INF
     // memset(D, 0xc0, col_size * sizeof(int));//D[0] = NEG_INF
@@ -242,9 +244,11 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
   // std::cerr << "path len:" << DAG->hlen[node[1].rank] << " " << DAG->tlen[node[0].rank] << "\n";
   // std::cerr << "m:" << m << "\n";
   // int mm_h_idx = mm->mm_h[rid];
+  int adaptive_cd = 0;
   int max = 0;
   int offset_band = 0;
   for (int i = 1; i < n; i++) {
+    adaptive_cd--;
     const node_t& cur = node[rank[i]];
     int* M_i = M[i];
     int* D_i = D[i];
@@ -258,13 +262,20 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
     // std::cerr << m << " " << Bs[i] << " " << Be[i] << "\n";
     // block_s = Bs[i] / reg_size, block_e = Be[i] / reg_size + 1; // [block_s,block_e)
     // std::cerr << "B:" << m << " " << w << " " << tbs << " " << tbe << '\n';
-    Ms[i] = std::max(0, std::min(DAG->hlen[i] + offset_band, m - DAG->tlen[i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[i] + offset_band, m - DAG->tlen[i]) + w);
-    int tbs = Ms[i] / reg_size, tbe = Me[i] / reg_size + 2;
-    // assert(tbe - tbs <= Be[i] - Bs[i]);
-    Bs[i] = Ms[i] / reg_size, Be[i] = Me[i] / reg_size + 2; // [block_s,block_e)
+    if (para->f > 0) {
+      Ms[i] = std::max(0, std::min(DAG->hlen[i] + offset_band, m - DAG->tlen[i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[i] + offset_band, m - DAG->tlen[i]) + w);
+      int tbs = Ms[i] / reg_size, tbe = Me[i] / reg_size + 2;
+      // assert(tbe - tbs <= Be[i] - Bs[i]);
+      if (tbe - tbs > Be[i] - Bs[i]) {
+        std::cerr << i << " " << tbe - tbs << " " << Be[i] - Bs[i] << "\n";
+        std::cerr << "adptive band segmentation fault " << "\n";
+        exit(0);
+      }
+      Bs[i] = Ms[i] / reg_size, Be[i] = Me[i] / reg_size + 2; // [block_s,block_e)
+    }
+
     int block_num = Be[i] - Bs[i] - 1; // not contain Be[i] - 1 's block
     sum += Me[i] - Ms[i] + 1;
-
     auto start2 = std::chrono::high_resolution_clock::now();
     for (int k = 0; k < cur.in.size(); k++) {
       int p = node[cur.in[k]].rank; // rank
@@ -334,7 +345,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
       M_i[j] = std::max({ M_i[j], D_i[j], I_i[j] });  // three source
     }
 
-    if (para->enable_seeding) {
+    if (para->enable_seeding && adaptive_cd <= 0) {
       int max_j = 0;
       for (int j = 1; j < block_num* reg_size; j++) { // block_num * reg_size
         max_j = M_i[j] > M_i[max_j] ? j : max_j;
@@ -358,6 +369,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
         // match minimizer
         // std::cerr << cur.id << " " << char256_table[cur.base] << " " << "M source" << "\n";
         mm128_t seed = mm->find_mm(rid, max_acj - 2);  // mm_h_idx will be updated to the next idx needed match 
+        bool find = 0;
         if (((seed.y >> 1) & 0x7FFFFFFF) == max_acj - 2) {
           bool isAnchored = false;
           // try max_similary mm
@@ -371,15 +383,20 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
             // std::cerr << pre.getPos(mm->rid_to_ord[mm->max_sim[rid]]) << " " << max_acj - 2 << "\n";
             offset_band = max_acj - DAG->hlen[i];
             // sum_offset += max_acj - DAG->hlen[i];
-            max = std::max(max, std::abs(offset_band));
+            max = std::max(max, offset_band);
             // std::cerr << para->b + (m - max_acj + 1) / para->f << "\n";
             w = para->b + (m - max_acj + 1) / para->f;
+            adaptive_cd = para->k * 5;
+            find = 1;
             tot++;
           }
           // for() cur.ids;
           // update offset
           //
 
+        }
+        if (!find) {
+          adaptive_cd = para->w - 1;
         }
 
       }

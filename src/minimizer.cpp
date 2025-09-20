@@ -225,7 +225,7 @@ void minimizer_t::get_guide_tree(para_t* para) {
     uint64_t last_x = mm_tv.a[0].x;
     int* mm_cnt = (int*)malloc(seqs_size * sizeof(int));
     for (_i = 0, i = 1; i < mm_tv.n; ++i) { // collect mm hits
-      // std::cerr << i << " " << mm_tv.n << '\n';
+      if (i % 1000 == 0) std::cerr << "[" << i << "/" << mm_tv.n << "]" << "\n";
       if (mm_tv.a[i].x != last_x) {
         // now [_i, i-1] have the same minimizer k-mer
         memset(mm_cnt, 0, seqs_size * sizeof(int));
@@ -287,7 +287,7 @@ void minimizer_t::get_guide_tree(para_t* para) {
       }
     }
 
-    std::cerr << max_jac << " " << max_i << " " << max_j << "\n";
+    // std::cerr << max_jac << " " << max_i << " " << max_j << "\n";
     // build guide tree
     // first pick two with the biggest jac (max_i, max_j)
     max_sim.resize(seqs_size);
@@ -322,7 +322,7 @@ void minimizer_t::get_guide_tree(para_t* para) {
         }
       }
       max_sim[max_j] = max_i;
-      std::cerr << jac << " " << max_sim[max_j] << " " << max_j << "\n";
+      // std::cerr << jac << " " << max_sim[max_j] << " " << max_j << "\n";
       if (max_i == seqs_size) {
         std::cerr << __func__ << "Bug in progressive tree building. (2)" << "\n";
         exit(EXIT_FAILURE);
