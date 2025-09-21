@@ -477,7 +477,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
   // return res;
   int j = calj(acj, Bs[i]);
   int op = ALL_OP;
-  std::cerr << rid << "\n";
+  // std::cerr << rid << "\n";
   // std::cerr << i << " " << j << " " << M[i][calj(acj, Bs[i])] << "\n";
   // std::cerr << "finsh align" << "\n";
   // std::cerr << "finish" << "\n";
@@ -575,7 +575,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
         int pj = calj(acj, Bs[p]);
         // if (ans == 5114 && pj - 1 >= 0) 
           // std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
-        if (pj - 1 >= 0 && M[i][j] == M[p][pj - 1] + match && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
+        if (pj - 1 >= 0 && M[i][j] == M[p][pj - 1] + (pre.base == seq[acj - 1] ? match : mismatch) && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
           bk = k;
           // break;
         }
@@ -585,13 +585,6 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
       if (bk != -1 && cur.in_weight[bk] >= cur.ind / 10) {  // backtrack based on the normal sample
         // std::cerr << "M";
         op = ALL_OP;
-        if (rid == 659) {
-          if (M[i][j] == I[i][j]) {
-            std::cerr << M[i][j] << " " << I[i][j] << "\n";
-            std::cerr << cur.in_weight[bk] << "\n";
-          }
-          std::cerr << "M" << char256_table[seq[acj - 1]];
-        }
         int p = node[cur.in[bk]].rank; // rank
         const node_t& pre = node[cur.in[bk]];
         if (pre.base == seq[acj - 1]) {
@@ -649,7 +642,6 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
         }
         // std::cerr << bk << "\n";
         if (bk != -1) {
-          if (rid == 659) std::cerr << "D";
           i = node[cur.in[bk]].rank;
           op = bop;
           continue;
@@ -661,10 +653,6 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
       if (j - 1 >= 0) {
         if (op == I_OP || M[i][j] == I[i][j]) {
           // std::cerr << "I";
-          if (rid == 659) {
-            std::cerr << M[i][j] << " " << I[i][j] << "\n";
-            std::cerr << "I" << char256_table[seq[acj - 1]];
-          }
           if (I[i][j] == M[i][j - 1] + o1) {
             res.emplace_back(res_t(-1, seq[acj - 1]));
             op = M_OP | D_OP;
@@ -680,7 +668,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
         }
       }
     }
-    if (op & M_OP) {  // M
+    if (op & M_OP) {  // MX
       // std::cerr << op << " " << i << " " << j << " ";
       // std::cerr << M[i][j] << " " << D[i][j] << " " << I[i][j] << "\n";
       // if (i == 15932 && j == 205) exit(0);
@@ -689,12 +677,12 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
       for (int k = 0; k < cur.in.size(); k++) {
         int p = node[cur.in[k]].rank; // rank
         const node_t& pre = node[cur.in[k]];
-        if (pre.base != seq[acj - 1]) continue;
+        // if (pre.base != seq[acj - 1]) continue;
         // M
         int pj = calj(acj, Bs[p]);
         // if (ans == 5114 && pj - 1 >= 0) 
           // std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
-        if (pj - 1 >= 0 && M[i][j] == M[p][pj - 1] + match && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
+        if (pj - 1 >= 0 && M[i][j] == M[p][pj - 1] + (pre.base == seq[acj - 1] ? match : mismatch) && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
           bk = k;
           // break;
         }
@@ -704,13 +692,6 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
       if (bk != -1) {
         // std::cerr << "M";
         op = ALL_OP;
-        if (rid == 659) {
-          if (M[i][j] == I[i][j]) {
-            std::cerr << M[i][j] << " " << I[i][j] << "\n";
-            std::cerr << cur.in_weight[bk] << "\n";
-          }
-          std::cerr << "M" << char256_table[seq[acj - 1]];
-        }
         int p = node[cur.in[bk]].rank; // rank
         const node_t& pre = node[cur.in[bk]];
         if (pre.base == seq[acj - 1]) {
@@ -729,52 +710,6 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
         continue;
       }
     }
-    if (op & M_OP) {  // X
-      // std::cerr << op << " " << i << " " << j << " ";
-      // std::cerr << M[i][j] << " " << D[i][j] << " " << I[i][j] << "\n";
-      // if (i == 15932 && j == 205) exit(0);
-      const node_t& cur = node[rank[i]];
-      int bk = -1;
-
-      for (int k = 0; k < cur.in.size(); k++) {
-        int p = node[cur.in[k]].rank; // rank
-        const node_t& pre = node[cur.in[k]];
-        if (pre.base == seq[acj - 1]) continue;
-        int pj = calj(acj, Bs[p]);
-        // X
-        // if (ans == 5114 && pj - 1 >= 0) 
-          // std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
-        if (pj - 1 >= 0 && M[i][j] == M[p][pj - 1] + mismatch && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
-          bk = k;
-          // break;
-        }
-      }
-      // std::cerr << bk << "\n";
-      // assert(bk != -1);
-      if (bk != -1) {
-        // std::cerr << "X";
-        if (rid == 659) std::cerr << "X" << char256_table[seq[acj - 1]];
-        op = ALL_OP;
-        int p = node[cur.in[bk]].rank; // rank
-        const node_t& pre = node[cur.in[bk]];
-        if (pre.base == seq[acj - 1]) {
-          // std::cout << "M";
-          res.emplace_back(res_t(pre.id, pre.base));
-        }
-        else {
-          // std::cout << "X";
-          const node_t& par = node[pre.par_id]; // dsu.find par
-          if (par.aligned_node[seq[acj - 1]] != -1) {
-            res.emplace_back(res_t(par.aligned_node[seq[acj - 1]], seq[acj - 1]));
-          }
-          else res.emplace_back(res_t(-1, seq[acj - 1], pre.par_id));
-        }
-        i = p, acj--;
-        continue;
-      }
-
-    }
-
 
     // if (op &) {
     //   if (M[i][j] == D[i][j]) op = 'D';
