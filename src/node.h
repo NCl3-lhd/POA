@@ -6,6 +6,7 @@ struct node_t {
   // 成员声明
   int id, rank, par_id;
   unsigned char base;
+  int ind; // in_degree
   std::vector<int> in, in_weight, out, out_weight;
   std::vector<int> aligned_node;
   std::vector<int> ids; // restore the ord[rid]
@@ -20,6 +21,7 @@ struct node_t {
   }
   void add_in_adj(int seq_id, int from, int curPos) { // seq_id == ord
     int ok = 0;
+    ind++;
     for (int i = 0; i < in.size(); i++) {
       if (from == in[i]) {
         in_weight[i]++;

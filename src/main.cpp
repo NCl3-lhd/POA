@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   // std::cerr << seqs.size() << "\n";
-  // seqs.resize(53);
+  // seqs.resize(660);
   // handle alignment 
   graph* DAG = new graph();
   // std::sort(ord.begin(), ord.end(), [&](const int& i, const int& j) {
