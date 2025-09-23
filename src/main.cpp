@@ -28,11 +28,11 @@ int main(int argc, char** argv) {
     ("t,thread", "thread number", cxxopts::value<int>()->default_value("0"))
     ("b,band_b", "band arg", cxxopts::value<int>()->default_value("50"))
     ("f,band_f", "band arg", cxxopts::value<int>()->default_value("100"))
+    ("S,seeding", " enable minimizer-based seeding and anchoring", cxxopts::value<bool>()->default_value("false"))
     ("k,k_mer", "k_mer lenth", cxxopts::value<int>()->default_value("19")) //19
     ("w,window", "k_mer_window lenth", cxxopts::value<int>()->default_value("10"))
     ("s,sample_num", "sample_num", cxxopts::value<int>()->default_value("50"))
     ("p,progressive_poa", "is progressive_poa", cxxopts::value<bool>()->default_value("false"))
-    ("S,seeding", " enable minimizer-based seeding and anchoring", cxxopts::value<bool>()->default_value("false"))
     ("h,help", "Print usage")
     ;
   int thread, sample_num;
@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
   //   return  seqs[i].seq.size() > seqs[j].seq.size();
   // });
   minimizer_t* mm = new minimizer_t(para, seqs);
-  if (para->progressive_poa || para->enable_seeding) {
+  if (para->progressive_poa) {
     std::cerr << "progressive" << "\n";
     mm->get_guide_tree(para);
     // std::reverse(ord.begin(), ord.end());

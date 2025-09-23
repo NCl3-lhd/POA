@@ -167,12 +167,9 @@ void minimizer_t::init(para_t* para, const std::vector<seq_t>& seqs) {
   rid_to_ord.resize(seqs_size);
   std::iota(ord.begin(), ord.end(), 0);
   std::iota(rid_to_ord.begin(), rid_to_ord.end(), 0);
-  if (para->progressive_poa || para->enable_seeding)
-  {
+  if (para->progressive_poa) {
     km = km_init();
     collect_mm(km, seqs, para);//mm ->Minimizer
-  }
-  if (para->progressive_poa) {
     maxl = 0;
     // std::cerr << "111 " << "\n";
     len.resize(seqs_size);

@@ -163,11 +163,11 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
   assert(col_size % reg_size == 0);
   std::vector<int> Ms(n, m + 1), Me(n); // index is rank  [Ms[i], Me[i]]
   std::vector<int> Bs(n), Be(n);  // index is rank    [Bs[i], Be[i] - 1)  Be[i] - 1 's block is Neg_inf is designed for M direciton dp
+  std::vector<int> Mp(n), Sl(n), Pl(n, m), Pr(n);  // index is rank
   size_t mtx_size = 0;
   int w = para->b;
   if (para->f) w += m / para->f;
-  int reserved_reg_size = 2;
-  if (para->enable_seeding) reserved_reg_size = std::max(reserved_reg_size, std::max(10, (w + reg_size - 1) / reg_size));
+
   size_t sum = 0;
   for (int i = 0; i < n; i++) {
     // Ms[i] = 0, Me[i] = m;
@@ -177,7 +177,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
     else {
       Ms[i] = 0, Me[i] = m;
     }
-    Bs[i] = Ms[i] / reg_size, Be[i] = Me[i] / reg_size + reserved_reg_size; // [block_s,block_e)
+    Bs[i] = Ms[i] / reg_size, Be[i] = Me[i] / reg_size + 2; // [block_s,block_e)
     mtx_size += (Be[i] - Bs[i]) * reg_size;
     // sum += Me[i] - Ms[i] + 1;
   }
@@ -262,15 +262,16 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
     // std::cerr << m << " " << Bs[i] << " " << Be[i] << "\n";
     // block_s = Bs[i] / reg_size, block_e = Be[i] / reg_size + 1; // [block_s,block_e)
     // std::cerr << "B:" << m << " " << w << " " << tbs << " " << tbe << '\n';
-    if (para->f > 0) {
-      Ms[i] = std::max(0, std::min(DAG->hlen[i] + offset_band, m - DAG->tlen[i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[i] + offset_band, m - DAG->tlen[i]) + w);
+
+    if (para->f > 0 && para->enable_seeding) {  // adptive band
+      Ms[i] = std::max(0, std::min({ Pl[i], DAG->hlen[i] + offset_band, m - DAG->tlen[i] }) - w), Me[i] = std::min(m, std::max({ Pr[i], DAG->hlen[i] + offset_band, m - DAG->tlen[i] }) + w);
       int tbs = Ms[i] / reg_size, tbe = Me[i] / reg_size + 2;
-      // assert(tbe - tbs <= Be[i] - Bs[i]);
-      if (tbe - tbs > Be[i] - Bs[i]) {
-        std::cerr << i << " " << tbe - tbs << " " << Be[i] - Bs[i] << "\n";
-        std::cerr << "adptive band segmentation fault " << "\n";
-        exit(0);
-      }
+      // // assert(tbe - tbs <= Be[i] - Bs[i]);
+      // if (tbe - tbs > Be[i] - Bs[i]) {
+      //   std::cerr << i << " " << tbe - tbs << " " << Be[i] - Bs[i] << "\n";
+      //   std::cerr << "adptive band segmentation fault " << "\n";
+      //   exit(0);
+      // }
       Bs[i] = Ms[i] / reg_size, Be[i] = Me[i] / reg_size + 2; // [block_s,block_e)
     }
 
@@ -329,6 +330,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
     // Be[i] - 1
     // if (block_s - 1 >= 0) _mm256_store_si256((reg*)(M_i + (block_s - 1) * reg_size), Neg_inf);
     _mm256_store_si256((reg*)(M_i + block_num * reg_size), Neg_inf);
+    _mm256_store_si256((reg*)(D_i + block_num * reg_size), Neg_inf);
 
     // if (i % 100 == 0) std::cout << i << "\n";
     // auto end2 = std::chrono::high_resolution_clock::now();
@@ -344,64 +346,94 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
       I_i[j] = std::max(I_i[j - 1] + e1, M_i[j - 1] + o1); // isource
       M_i[j] = std::max({ M_i[j], D_i[j], I_i[j] });  // three source
     }
-
-    if (para->enable_seeding && adaptive_cd <= 0) {
+    _mm256_store_si256((reg*)(I_i + block_num * reg_size), Neg_inf);
+    
+    if (para->enable_seeding) {
       int max_j = 0;
       for (int j = 1; j < block_num* reg_size; j++) { // block_num * reg_size
         max_j = M_i[j] > M_i[max_j] ? j : max_j;
       }
       int max_acj = Bs[i] * reg_size + max_j;
-      int is_M_OP = -1;
-      for (int k = 0; k < cur.in.size(); k++) {
-        int p = node[cur.in[k]].rank; // rank
-        const node_t& pre = node[cur.in[k]];
-        if (pre.base != seq[max_acj - 1]) continue;
-        // M
-        int pj = calj(max_acj, Bs[p]);
-        // if (ans == 5114 && pj - 1 >= 0) 
-          // std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
-        if (pj - 1 >= 0 && M[i][max_j] == M[p][pj - 1] + match) {
-          is_M_OP = k;
-          break;
-        }
+      for (int k = 0; k < cur.out.size(); k++) {
+        int suc = node[cur.out[k]].rank;
+        Pl[suc] = std::min(Pl[suc], max_acj), Pr[suc] = std::max(Pr[suc], max_acj + 1);
       }
-      if (is_M_OP != -1 && i < n - 1) {
-        // match minimizer
-        // std::cerr << cur.id << " " << char256_table[cur.base] << " " << "M source" << "\n";
-        mm128_t seed = mm->find_mm(rid, max_acj - 2);  // mm_h_idx will be updated to the next idx needed match 
-        bool find = 0;
-        if (((seed.y >> 1) & 0x7FFFFFFF) == max_acj - 2) {
-          bool isAnchored = false;
-          // try max_similary mm
-          const node_t& pre = node[cur.in[is_M_OP]];
-          mm128_t seed_g = mm->match_mm(seed.x, mm->max_sim[rid]);
-          // std::cerr << pre.id << " " << max_acj - 2 << " " << seed.x << "\n";
-          // std::cerr << pre.getPos(mm->rid_to_ord[mm->max_sim[rid]]) << " " << 
-          // std::cerr << "\n";
-          if (seed_g.x == seed.x && pre.getPos(mm->rid_to_ord[mm->max_sim[rid]]) >= ((seed_g.y >> 1) & 0x7FFFFFFF)) { //&& pos[rid][(seed_g.y >> 1) & 0x7FFFFFFF)] >= cur.id
-            // std::cerr << "anchored" << "\n";
-            // std::cerr << pre.getPos(mm->rid_to_ord[mm->max_sim[rid]]) << " " << max_acj - 2 << "\n";
-            offset_band = max_acj - DAG->hlen[i];
-            // sum_offset += max_acj - DAG->hlen[i];
-            max = std::max(max, offset_band);
-            // std::cerr << para->b + (m - max_acj + 1) / para->f << "\n";
-            w = para->b + (m - max_acj + 1) / para->f;
-            adaptive_cd = para->k * 5;
-            find = 1;
-            tot++;
-          }
-          // for() cur.ids;
-          // update offset
-          //
-
-        }
-        if (!find) {
-          adaptive_cd = para->w - 1;
-        }
-
-      }
-
+      // Mp[i] = max_acj;
+      // if (cur.base == seq[max_acj]) {
+      //   for (int k = 0; k < cur.in.size(); k++) {
+      //     int p = node[cur.in[k]].rank; // rank
+      //     if (Mp[p] + 1 == Mp[i]) Sl[i] = std::max(Sl[i], Sl[p] + 1);
+      //   }
+      // }
+      // if (Sl[i] >= 100) {
+      //   offset_band = max_acj - DAG->hlen[i];
+      //   // sum_offset += max_acj - DAG->hlen[i];
+      //   max = std::max(max, offset_band);
+      //   // std::cerr << para->b + (m - max_acj + 1) / para->f << "\n";
+      //   w = para->b + (m - max_acj + 1) / para->f;
+      //   tot++;
+      //   Sl[i] = 0;
+      // }
     }
+
+    // if (para->enable_seeding && adaptive_cd <= 0) {
+    //   int max_j = 0;
+    //   for (int j = 1; j < block_num* reg_size; j++) { // block_num * reg_size
+    //     max_j = M_i[j] > M_i[max_j] ? j : max_j;
+    //   }
+    //   int max_acj = Bs[i] * reg_size + max_j;
+    //   int is_M_OP = -1;
+    //   for (int k = 0; k < cur.in.size(); k++) {
+    //     int p = node[cur.in[k]].rank; // rank
+    //     const node_t& pre = node[cur.in[k]];
+    //     if (pre.base != seq[max_acj - 1]) continue;
+    //     // M
+    //     int pj = calj(max_acj, Bs[p]);
+    //     // if (ans == 5114 && pj - 1 >= 0) 
+    //       // std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
+    //     if (pj - 1 >= 0 && M[i][max_j] == M[p][pj - 1] + match) {
+    //       is_M_OP = k;
+    //       break;
+    //     }
+    //   }
+    //   if (is_M_OP != -1 && i < n - 1) {
+    //     // match minimizer
+    //     // std::cerr << cur.id << " " << char256_table[cur.base] << " " << "M source" << "\n";
+    //     mm128_t seed = mm->find_mm(rid, max_acj - 2);  // mm_h_idx will be updated to the next idx needed match 
+    //     bool find = 0;
+    //     if (((seed.y >> 1) & 0x7FFFFFFF) == max_acj - 2) {
+    //       bool isAnchored = false;
+    //       // try max_similary mm
+    //       const node_t& pre = node[cur.in[is_M_OP]];
+    //       mm128_t seed_g = mm->match_mm(seed.x, mm->max_sim[rid]);
+    //       // std::cerr << pre.id << " " << max_acj - 2 << " " << seed.x << "\n";
+    //       // std::cerr << pre.getPos(mm->rid_to_ord[mm->max_sim[rid]]) << " " << 
+    //       // std::cerr << "\n";
+    //       if (seed_g.x == seed.x && pre.getPos(mm->rid_to_ord[mm->max_sim[rid]]) >= ((seed_g.y >> 1) & 0x7FFFFFFF)) { //&& pos[rid][(seed_g.y >> 1) & 0x7FFFFFFF)] >= cur.id
+    //         // std::cerr << "anchored" << "\n";
+    //         // std::cerr << pre.getPos(mm->rid_to_ord[mm->max_sim[rid]]) << " " << max_acj - 2 << "\n";
+    //         offset_band = max_acj - DAG->hlen[i];
+    //         // sum_offset += max_acj - DAG->hlen[i];
+    //         max = std::max(max, offset_band);
+    //         // std::cerr << para->b + (m - max_acj + 1) / para->f << "\n";
+    //         w = para->b + (m - max_acj + 1) / para->f;
+    //         adaptive_cd = para->k * 5;
+    //         find = 1;
+    //         tot++;
+    //       }
+    //       // for() cur.ids;
+    //       // update offset
+    //       //
+
+    //     }
+    //     if (!find) {
+    //       adaptive_cd = para->w - 1;
+    //     }
+
+    //   }
+
+    // }
+
     // if (debug) {
     //   // for (int j = std::max(1, block_s * reg_size); j < block_e * reg_size; j++) {
     //   //   std::cerr << i << " " << j << " " << M_i[j] << "\n";
@@ -484,7 +516,11 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
   while (i > 0 || acj > 0) {
     // dsource
     j = calj(acj, Bs[i]);
-    // std::cerr << "l:" << Bs[i] * reg_size << " " << "r:" << (Be[i] - 1) * reg_size << "\n";
+    // if (acj > (Be[i] - 1) * reg_size || acj < Bs[i] * reg_size) {
+    //   std::cerr << "l:" << Bs[i] * reg_size << " " << "r:" << (Be[i] - 1) * reg_size << "\n";
+    //   std::cerr << acj << "\n";
+    //   exit(0);
+    // }
     // std::cerr << op << " " << i << " " << j << "\n";
     // if (j < 0 || j >(Be[i] - 1) * reg_size) {
     //   std::cerr << ans << "\n";
@@ -575,7 +611,8 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
         int pj = calj(acj, Bs[p]);
         // if (ans == 5114 && pj - 1 >= 0) 
           // std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
-        if (pj - 1 >= 0 && M[i][j] == M[p][pj - 1] + (pre.base == seq[acj - 1] ? match : mismatch) && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
+        int block_num = Be[p] - Bs[p] - 1; // not contain Be[i] - 1 's block
+        if (pj - 1 >= 0 && pj - 1 < block_num * reg_size && M[i][j] == M[p][pj - 1] + (pre.base == seq[acj - 1] ? match : mismatch) && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
           bk = k;
           // break;
         }
@@ -680,9 +717,10 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
         // if (pre.base != seq[acj - 1]) continue;
         // M
         int pj = calj(acj, Bs[p]);
-        // if (ans == 5114 && pj - 1 >= 0) 
-          // std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
-        if (pj - 1 >= 0 && M[i][j] == M[p][pj - 1] + (pre.base == seq[acj - 1] ? match : mismatch) && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
+        // if (M[i][j] == 17586 && pj - 1 >= 0)
+        //   std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
+        int block_num = Be[p] - Bs[p] - 1; // not contain Be[i] - 1 's block
+        if (pj - 1 >= 0 && pj - 1 < block_num * reg_size && M[i][j] == M[p][pj - 1] + (pre.base == seq[acj - 1] ? match : mismatch) && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
           bk = k;
           // break;
         }
@@ -715,7 +753,9 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
     //   if (M[i][j] == D[i][j]) op = 'D';
     //   if (op == 'M' && M[i][j] == I[i][j]) op = 'I';
     // }
-
+    // std::cerr << Bs[i] * reg_size << " " << acj << " " << Be[i] * reg_size << "\n";
+    // std::cerr << M[i][j] << " " << D[i][j] << " " << I[i][j] << "\n";
+    // std::cerr << i << " " << n - 1 << " " << acj << " " << m << "\n";
     std::cerr << " backtrack error" << "\n";
     exit(0);
     // if (op == 'M') {
