@@ -10,5 +10,6 @@ struct para_t {
   int k, w;// k-mer
   bool enable_seeding;
   bool progressive_poa;
+  int result; // result format 0 consensus,1 rc-msa
 };
 #endif

@@ -33,6 +33,7 @@ int main(int argc, char** argv) {
     ("w,window", "k_mer_window lenth", cxxopts::value<int>()->default_value("10"))
     ("s,sample_num", "sample_num", cxxopts::value<int>()->default_value("50"))
     ("p,progressive_poa", "is progressive_poa", cxxopts::value<bool>()->default_value("false"))
+    ("r,result", "result format", cxxopts::value<int>()->default_value("0"))
     ("h,help", "Print usage")
     ;
   int thread, sample_num;
@@ -62,6 +63,7 @@ int main(int argc, char** argv) {
     thread = result["thread"].as<int>();
     sample_num = result["sample_num"].as<int>();
     if (sample_num < 0) sample_num * -1;
+    para->result = result["result"].as<int>();
   }
   catch (const cxxopts::exceptions::exception& e)
   {
@@ -133,7 +135,7 @@ int main(int argc, char** argv) {
       // std::cout << i << " " << DAG->rank.size() << "\n";
     }
     // handle output 
-    DAG->output_rc_msa(mm->rid_to_ord, seqs);
+    // DAG->output_rc_msa(mm->rid_to_ord, seqs);
     // std::cerr << minl << " " << maxl << '\n';
   }
   else {
@@ -206,12 +208,12 @@ int main(int argc, char** argv) {
     }
     // handle output 
     // std::cerr << "output" << '\n';
-    DAG->output_rc_msa(mm->rid_to_ord, seqs);
     // std::cerr << "delete" << "\n";
     delete[] mpool;
     // std::cerr << "finish" << "\n";
   }
-
+  if (para->result == 0) DAG->output_consensus();
+  else if (para->result == 1) DAG->output_rc_msa(mm->rid_to_ord, seqs);
 
 
   // std::cout << "correct check" << "\n";

@@ -196,6 +196,7 @@ void graph::output_rc_msa(const std::vector<int>& rid_to_ord, const std::vector<
     std::cout << res[rid_to_ord[i]] << "\n";
   }
 }
+
 std::vector<int> graph::calculateR() const {
   std::queue<int> q;
   std::vector<int> deg(node.size());
@@ -235,4 +236,52 @@ std::vector<int> graph::calculateR() const {
     }
   }
   return R;
+}
+
+void graph::output_consensus() {
+  std::queue<int> q;
+  std::vector<int> deg(node.size());
+  std::vector<int> nex(node.size());
+  std::vector<int> R(node.size());  // index is rank
+  for (int i = 0; i < node.size(); i++) {
+    R[i] = 0;
+    deg[i] = node[i].out.size();
+  }
+  q.push(1);  // sink
+  while (q.size()) {
+    int u = q.front();
+    q.pop();
+    const node_t& cur = node[u];
+    if (u != 1) {
+
+      int wmax = -1, max_suc = -1;
+      for (int k = 0; k < cur.out.size(); k++) {
+        int v = cur.out[k];
+        int suc = node[v].id;
+        if (cur.out_weight[k] > wmax) {
+          wmax = cur.out_weight[k];
+          max_suc = suc;
+        }
+      }
+      nex[cur.id] = max_suc;
+    }
+    if (u == 0) {
+      break;
+    }
+    for (int k = 0; k < cur.in.size(); k++) {
+      int v = node[u].in[k];
+      if (--deg[v] == 0) {
+        q.push(v);
+      }
+    }
+  }
+  std::string consensus;
+  int node_id = nex[0];
+  while (node_id != 1) {
+    consensus += char256_table[node[node_id].base];
+    node_id = nex[node_id];
+  }
+  std::cout << ">" << "consensus sequence" << "\n";
+  std::cout << consensus << "\n";
+  return;
 }

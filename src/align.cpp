@@ -163,7 +163,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
   assert(col_size % reg_size == 0);
   std::vector<int> Ms(n, m + 1), Me(n); // index is rank  [Ms[i], Me[i]]
   std::vector<int> Bs(n), Be(n);  // index is rank    [Bs[i], Be[i] - 1)  Be[i] - 1 's block is Neg_inf is designed for M direciton dp
-  std::vector<int> Mp(n), Sl(n), Pl(n, m), Pr(n), Ol(n), Or(n);  // index is rank
+  std::vector<int> Mp(n), Sl(n), Pl(n, m), Pr(n), Ol(n), Or(n), Ow(n);  // index is rank
   size_t mtx_size = 0;
   int w = para->b;
   if (para->f) w += m / para->f;
@@ -266,8 +266,15 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
     // std::cerr << "B:" << m << " " << w << " " << tbs << " " << tbe << '\n';
 
     if (para->f > 0 && para->enable_seeding) {  // adptive band
-      Ms[i] = std::max(0, std::min({ Pl[i], DAG->hlen[i] + Ol[i], m - DAG->tlen[i] }) - w), Me[i] = std::min(m, std::max({ Pr[i], DAG->hlen[i] + Or[i], m - DAG->tlen[i] }) + w);
-      int tbs = Ms[i] / reg_size, tbe = Me[i] / reg_size + 2;
+      // int pmid = (Pl[i] + Pr[i]) / 2;
+      // int tms = std::min({ Pl[i], DAG->hlen[i] + Ol[i], m - DAG->tlen[i] }), tme = std::max({ Pr[i], DAG->hlen[i] + Or[i], m - DAG->tlen[i] });
+      // int len = std::max(pmid - tms + 1, tme - pmid);
+      // tms = std::max(0, pmid - len - w - Ow[i]), tme = std::min(m, pmid + len + w + Ow[i]);
+      // Ms[i] = tms, Me[i] = tme;
+      // int tw = para->b + (m - (DAG->hlen[i] + Ol[i])) / para->f;
+      Ms[i] = std::max(0, std::min({ Pl[i], DAG->hlen[i] + Ol[i], m - DAG->tlen[i] }) - w - Ow[i]), Me[i] = std::min(m, std::max({ Pr[i], DAG->hlen[i] + Or[i], m - DAG->tlen[i] }) + w + Ow[i]);
+
+      // int tbs = Ms[i] / reg_size, tbe = Me[i] / reg_size + 2;
       // // assert(tbe - tbs <= Be[i] - Bs[i]);
       // if (tbe - tbs > Be[i] - Bs[i]) {
       //   std::cerr << i << " " << tbe - tbs << " " << Be[i] - Bs[i] << "\n";
@@ -355,36 +362,54 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
       for (int j = 1; j < block_num* reg_size; j++) { // block_num * reg_size
         max_j = M_i[j] > M_i[max_j] ? j : max_j;
       }
-      int max_acj = Bs[i] * reg_size + max_j;
-      for (int k = 0; k < cur.out.size(); k++) {
-        int suc = node[cur.out[k]].rank;
-        Pl[suc] = std::min(Pl[suc], max_acj), Pr[suc] = std::max(Pr[suc], max_acj + 1);
-      }
+      int max_acj = Bs[i] * reg_size + max_j, max_slp = 0;
+      bool isMatch = false;
       Mp[i] = max_acj;
       if (cur.base == seq[max_acj]) {
         for (int k = 0; k < cur.in.size(); k++) {
           int p = node[cur.in[k]].rank; // rank
-          if (Mp[p] + 1 == Mp[i]) Sl[i] = std::max(Sl[i], Sl[p] + 1);
+          max_slp = Sl[p] > max_slp ? Sl[p] : max_slp;
+          if (Mp[p] + 1 == Mp[i]) {
+            Sl[i] = std::max(Sl[i], Sl[p] + 1);
+            isMatch = true;
+          }
         }
       }
-      if (Sl[i] >= 50) {
-        offset_band = max_acj - DAG->hlen[i];
+      if (!isMatch && max_slp < 30) {
+        // w += max_slp;
+        Ow[i] += max_slp + 1;
+        Ow[i] = std::min(Ow[i], 5 * w);
+      }
+      if (Sl[i] >= 30) {
+        // offset_band = max_acj - DAG->hlen[i];
         Ol[i] = max_acj - DAG->hlen[i];
         Or[i] = max_acj - DAG->hlen[i];
+
         // sum_offset += max_acj - DAG->hlen[i];
-        max = std::max(max, offset_band);
+        // max = std::max(max, offset_band);
         // std::cerr << para->b + (m - max_acj + 1) / para->f << "\n";
-        // w = para->b + (m - max_acj + 1) / para->f;
+        // w = para->b + m / para->f;
+        Ow[i] = 0;
         tot++;
         // Sl[i] = 0;
-        // for (int k = 0; k < cur.out.size(); k++) {
-        //   int suc = node[cur.out[k]].rank;
-        //   Ol[suc] = Ol[i], Or[suc] = Or[i];
-        // }
+        for (int k = 0; k < cur.out.size(); k++) {
+          int suc = node[cur.out[k]].rank;
+          Ol[suc] = Ol[i], Or[suc] = Or[i];
+        }
       }
       for (int k = 0; k < cur.out.size(); k++) {
         int suc = node[cur.out[k]].rank;
         Ol[suc] = std::min(Ol[suc], Ol[i]), Or[suc] = std::max(Or[suc], Or[i]);
+      }
+
+      for (int k = 0; k < cur.out.size(); k++) {
+        int suc = node[cur.out[k]].rank;
+        Pl[suc] = std::min(Pl[suc], max_acj), Pr[suc] = std::max(Pr[suc], max_acj + 1);
+        Ow[suc] = Ow[i] ? std::max(Ow[suc], Ow[i]) : Ow[i];
+        // int tms = std::min({ Pl[suc], DAG->hlen[suc] + Ol[suc], m - DAG->tlen[suc] }), tme = std::max({ Pr[suc], DAG->hlen[suc] + Or[suc], m - DAG->tlen[suc] });
+        // int tbs = tms / reg_size, tbe = tme / reg_size;
+        // Pr[suc] = std::max(Pr[suc], max_acj + (max_acj - tbs * reg_size));
+        // Pl[suc] = std::min(Pl[suc], max_acj - (tbe * reg_size - max_acj));
       }
     }
 
@@ -459,7 +484,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
     //   Ms[suc] = std::min(Ms[suc], max_pos + 1), Me[suc] = std::max(Me[suc], max_pos + 1);
     // }
   }
-  // std::cerr << sum * 1.0 / (1ll * (n * m)) << "\n";
+  // std::cerr << sum * 1.0 / (1ll * n * m) << "\n";
   // std::cerr << "anchor num:" << tot << "\n";
   // std::cerr << "sum_offset" << max << "\n";
   // std::cerr << "avg pre size:" << tot / n << "\n";
