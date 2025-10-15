@@ -241,10 +241,10 @@ std::vector<int> graph::calculateR() const {
 void graph::output_consensus() {
   std::queue<int> q;
   std::vector<int> deg(node.size());
-  std::vector<int> nex(node.size());
-  std::vector<int> R(node.size());  // index is rank
+  std::vector<int> nex(node.size());  // index is id
+  std::vector<int> score(node.size());  // index is id
   for (int i = 0; i < node.size(); i++) {
-    R[i] = 0;
+    score[i] = 0;
     deg[i] = node[i].out.size();
   }
   q.push(1);  // sink
@@ -253,17 +253,17 @@ void graph::output_consensus() {
     q.pop();
     const node_t& cur = node[u];
     if (u != 1) {
-
       int wmax = -1, max_suc = -1;
       for (int k = 0; k < cur.out.size(); k++) {
         int v = cur.out[k];
         int suc = node[v].id;
-        if (cur.out_weight[k] > wmax) {
+        if (cur.out_weight[k] > wmax || (cur.out_weight[k] == wmax && score[suc] > score[max_suc])) {
           wmax = cur.out_weight[k];
           max_suc = suc;
         }
       }
       nex[cur.id] = max_suc;
+      score[cur.id] = score[max_suc] + wmax;
     }
     if (u == 0) {
       break;
