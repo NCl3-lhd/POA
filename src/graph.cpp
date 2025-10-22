@@ -1,6 +1,8 @@
 #include "graph.h"
 #include "sequence.h"
 #include <queue>
+#include <algorithm>
+
 extern char char26_table[256];
 void graph::add_adj(int seq_id, int from, int to, int curPos) {
   // from and to node actually exist
@@ -241,46 +243,47 @@ std::vector<int> graph::calculateR() const {
 void graph::output_consensus() {
   std::queue<int> q;
   std::vector<int> deg(node.size());
-  std::vector<int> nex(node.size());  // index is id
+  std::vector<int> pre(node.size());  // index is id
   std::vector<int> score(node.size());  // index is id
   for (int i = 0; i < node.size(); i++) {
     score[i] = 0;
-    deg[i] = node[i].out.size();
+    deg[i] = node[i].in.size();
   }
-  q.push(1);  // sink
+  q.push(0);  // src 
   while (q.size()) {
     int u = q.front();
     q.pop();
     const node_t& cur = node[u];
-    if (u != 1) {
-      int wmax = -1, max_suc = -1;
-      for (int k = 0; k < cur.out.size(); k++) {
-        int v = cur.out[k];
-        int suc = node[v].id;
-        if (cur.out_weight[k] > wmax || (cur.out_weight[k] == wmax && score[suc] > score[max_suc])) {
-          wmax = cur.out_weight[k];
-          max_suc = suc;
+    if (u != 0) {
+      int wmax = -1, max_pre = -1;
+      for (int k = 0; k < cur.in.size(); k++) {
+        int v = cur.in[k];
+        int pre = node[v].id;
+        if (cur.in_weight[k] > wmax || (cur.in_weight[k] == wmax && score[pre] > score[max_pre])) {
+          wmax = cur.in_weight[k];
+          max_pre = pre;
         }
       }
-      nex[cur.id] = max_suc;
-      score[cur.id] = score[max_suc] + wmax;
+      pre[cur.id] = max_pre;
+      score[cur.id] = score[max_pre] + wmax;
     }
-    if (u == 0) {
+    if (u == 1) {
       break;
     }
-    for (int k = 0; k < cur.in.size(); k++) {
-      int v = node[u].in[k];
+    for (int k = 0; k < cur.out.size(); k++) {
+      int v = node[u].out[k];
       if (--deg[v] == 0) {
         q.push(v);
       }
     }
   }
   std::string consensus;
-  int node_id = nex[0];
-  while (node_id != 1) {
+  int node_id = pre[1];
+  while (node_id != 0) {
     consensus += char256_table[node[node_id].base];
-    node_id = nex[node_id];
+    node_id = pre[node_id];
   }
+  std::reverse(consensus.begin(), consensus.end());
   std::cout << ">" << "consensus sequence" << "\n";
   std::cout << consensus << "\n";
   return;

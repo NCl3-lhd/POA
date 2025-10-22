@@ -26,8 +26,8 @@ int main(int argc, char** argv) {
     ("O,gap_open", "gap_open sorce", cxxopts::value<int>()->default_value("-4"))
     ("E,gap_ext", "gap_ext sorce", cxxopts::value<int>()->default_value("-2"))
     ("t,thread", "thread number", cxxopts::value<int>()->default_value("0"))
-    ("b,band_b", "band arg", cxxopts::value<int>()->default_value("50"))
-    ("f,band_f", "band arg", cxxopts::value<int>()->default_value("100"))
+    ("b,band_b", "band arg", cxxopts::value<int>()->default_value("100"))
+    ("f,band_f", "band arg", cxxopts::value<int>()->default_value("40"))
     ("S,seeding", " enable minimizer-based seeding and anchoring", cxxopts::value<bool>()->default_value("false"))
     ("k,k_mer", "k_mer lenth", cxxopts::value<int>()->default_value("19")) //19
     ("w,window", "k_mer_window lenth", cxxopts::value<int>()->default_value("10"))
