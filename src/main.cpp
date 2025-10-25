@@ -34,6 +34,7 @@ int main(int argc, char** argv) {
     ("s,sample_num", "sample_num", cxxopts::value<int>()->default_value("50"))
     ("p,progressive_poa", "is progressive_poa", cxxopts::value<bool>()->default_value("false"))
     ("r,result", "result format", cxxopts::value<int>()->default_value("0"))
+    ("V,verbose", "verbose level (0-2). 0: none, 1: information, 2: debug [0]\n", cxxopts::value<int>()->default_value("0"))
     ("h,help", "Print usage")
     ;
   int thread, sample_num;
@@ -64,6 +65,7 @@ int main(int argc, char** argv) {
     sample_num = result["sample_num"].as<int>();
     if (sample_num < 0) sample_num * -1;
     para->result = result["result"].as<int>();
+    para->verbose = result["verbose"].as<int>();
   }
   catch (const cxxopts::exceptions::exception& e)
   {
@@ -104,7 +106,7 @@ int main(int argc, char** argv) {
   // for (int i = 0; i < seqs.size(); i++) {
   //   std::cout << i << " " << ord[i] << " " << seqs[ord[i]].seq.size() << "\n";
   // }
-  std::cerr << "poa" << "\n";
+  // std::cerr << "poa" << "\n";
   int rid = ord[0];
   DAG->init(para, rid, seqs[rid].seq);
   // seqs[0].seq = "TTGCCCTT";
@@ -114,9 +116,10 @@ int main(int argc, char** argv) {
     aligned_buff_t mpool;
     for (int i = 1; i < seqs.size(); i++) {  //seqs.size()
       rid = ord[i];
-      if (i % 10 == 0) {
+      if (para->verbose && i % 10 == 0) {
         std::cerr << "[" << i << "/" << seqs.size() << "]" << "\n";
       }
+
       std::string tseq;
       tseq += char26_table['N'];
       for (int j = 0; j < seqs[rid].seq.size(); j++) {
@@ -146,7 +149,7 @@ int main(int argc, char** argv) {
     // sample_num = 0;
     for (int i = 1; i < seqs.size() && i <= sample_num; i++) { // ensure parallel before DAG have the enough sample seq
       rid = ord[i];
-      if (i % 10 == 0) {
+      if (para->verbose && i % 10 == 0) {
         std::cerr << "[" << i << "/" << seqs.size() << "]" << "\n";
       }
       std::string tseq;
@@ -169,9 +172,6 @@ int main(int argc, char** argv) {
       results.clear();
       for (int j = 0; j < thread && i + j < seqs.size(); j++) {
         rid = ord[i + j];
-        if (j % 3 == 0) {
-          std::cerr << "[" << i + j << "/" << seqs.size() << "]" << "\n";
-        }
         // const char* seq_i = seqs[i].seq.c_str();
         const std::string& seq_i = seqs[rid].seq;
         aligned_buff_t* cur_mpool = &mpool[j];
@@ -186,11 +186,15 @@ int main(int argc, char** argv) {
           return res;
         }));
       }
-      // std::cerr << "add_path" << "\n";
       std::vector<std::vector<res_t>> res;
+      if (para->verbose) {
+        std::cerr << "[" << i << "/" << seqs.size() << "]" << "\n";
+      }
       for (auto&& result : results) {
         res.emplace_back(result.get());
       }
+
+      // std::cerr << "add_path" << "\n";
       int node_num = DAG->node.size();
       for (int j = 0; j < res.size(); j++) {
         rid = ord[i + j];

@@ -29,7 +29,7 @@ struct aligned_buff_t {
     }
     if (size > buff_size) {
       free_aligned(buff);
-      std::cerr << "*2\n";
+      // std::cerr << "*2\n";
       buff_size *= 2; // 倍增
       buff_size = buff_size >= size ? buff_size : size;
       ::alloc_aligned(&buff, alignment, buff_size);
