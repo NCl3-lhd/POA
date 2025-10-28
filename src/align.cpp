@@ -152,6 +152,15 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
   int n = DAG->node.size(), m = _seq.size();
   std::string seq = _seq;
   assert(seq[0] == para->m - 1);
+  std::vector<res_t> res;
+  if (n <= 2) {
+    std::cerr << n << "\n";
+    res.emplace_back(res_t(0, seq[0]));
+    for (int j = 1; j < m; j++) {
+      res.emplace_back(res_t(-1, seq[j]));
+    }
+    return res;
+  }
   const std::vector<node_t>& node = DAG->node;const std::vector<int>& rank = DAG->rank;
   std::vector<int> mat = para->mat;
   int match = para->match, mismatch = para->mismatch, para_m = para->m, e1 = para->gap_ext1, o1 = para->gap_open1 + e1;
@@ -250,6 +259,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
   int max = 0;
   int offset_band = 0;
   for (int i = 1; i < n; i++) {
+    // std::cerr << i << " " << n << "\n";
     adaptive_cd--;
     const node_t& cur = node[rank[i]];
     int* M_i = M[i];
@@ -543,7 +553,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
   //   }
   // }
   // if (3 * mtx_size == 5208) std::cerr << _seq.size() << " " << seq.size() << "\n";
-  std::vector<res_t> res;
+
   // return res;
   int j = calj(acj, Bs[i]);
   int op = ALL_OP;

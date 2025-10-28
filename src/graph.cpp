@@ -4,6 +4,12 @@
 #include <algorithm>
 
 extern char char26_table[256];
+int graph::add_node(para_t* para, char base) {
+  int para_m = para->m;
+  int id = node.size();
+  node.emplace_back(node_t(node.size(), char26_table[base], para_m)); // src 0
+  return id;
+}
 void graph::add_adj(int seq_id, int from, int to, int curPos) {
   // from and to node actually exist
   // std::cout << from << " " << to << "\n";
@@ -48,15 +54,20 @@ void graph::topsort(int op, int para_f) { // if op == 1, is not normal topsort, 
     }
     return;
   }
+
   for (int i = 0; i < node.size(); i++) {
     deg[i] = node[i].in.size();
-    if (deg[i] == 0) stk.emplace_back(i);
+    if (deg[i] == 0) {
+      stk.emplace_back(i);
+    }
   }
+
   rank.clear();
   while (stk.size()) {
     int u = stk.back();
     stk.pop_back();
     node_t& cur = node[u];
+    // std::cerr << u << " ";
     cur.rank = rank.size();
     rank.emplace_back(u);
     for (int i = 0; i < cur.out.size(); i++) {
@@ -66,6 +77,11 @@ void graph::topsort(int op, int para_f) { // if op == 1, is not normal topsort, 
       }
     }
   }
+
+  // for (int i = 0; i < rank.size(); i++) {
+  //   std::cerr << rank[i] << " ";
+  // }
+  // std::cerr << rank.size() << " " << node.size() << "\n";
   if (para_f > 0) {
     hlen.resize(node.size());
     for (int i = 0; i < rank.size(); i++) { // ni topsort id dp
@@ -105,13 +121,36 @@ void graph::topsort(int op, int para_f) { // if op == 1, is not normal topsort, 
     // lp[node[0].rank] = 0; // src lp = 0
   }
 }
-void graph::init(para_t* para, int seq_id, const std::string& str) {
+void graph::init(para_t* para) {
   // 清空现有数据
   int para_m = para->m, para_f = para->f;
   node.clear();
   node.emplace_back(node_t(node.size(), char26_table['N'], para_m)); // src 0
   node.emplace_back(node_t(node.size(), char26_table['N'], para_m)); // sink 1
   // node_h.emplace_back(node.size());
+
+  // int pre_id = 0;
+  // // std::cerr << " " << str.size() << "\n";
+  // for (int i = 0; i < str.size(); i++) {
+  //   int cur_id = node.size();
+  //   node.emplace_back(node_t(cur_id, char26_table[str[i]], para_m)); // str[i]
+  //   add_adj(0, pre_id, cur_id, i);
+  //   pre_id = cur_id;
+  // }
+  // add_adj(0, pre_id, 1, str.size()); // 
+  // topsort(0, para_f);
+}
+
+void graph::init(para_t* para, int seq_id, const std::string& str) {
+  // 清空现有数据
+  int para_m = para->m, para_f = para->f;
+  if (node.empty()) {
+    node.clear();
+    node.emplace_back(node_t(node.size(), char26_table['N'], para_m)); // src 0
+    node.emplace_back(node_t(node.size(), char26_table['N'], para_m)); // sink 1
+  }
+  // node_h.emplace_back(node.size());
+
   int pre_id = 0;
   // std::cerr << " " << str.size() << "\n";
   for (int i = 0; i < str.size(); i++) {
@@ -167,7 +206,10 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
           cur_id = node.size();
           node.emplace_back(node_t(cur_id, res[i].base, para_m));
         }
-        if (anchored_id != -1) add_adj(seq_id, anchored_id, cur_id, curPos++);
+        if (anchored_id != -1) {
+          // std::cerr << anchored_id << " " << char256_table[res[i].base] << "  " << cur_id << "\n";
+          add_adj(seq_id, anchored_id, cur_id, curPos++);
+        }
       }
       // std::cout << cur_id << " " << char256_table[res[i].base] << "  " << anchored_id << "\n";
     }
@@ -175,7 +217,10 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
       // std::cerr << 4 << "\n";
       // std::cerr << node.size() << " " << cur_id << " " << anchored_id << "\n";
       // std::cout << cur_id << " " << char256_table[res[i].base] << "  " << anchored_id << "\n";
-      if (anchored_id != -1) add_adj(seq_id, anchored_id, cur_id, curPos++);
+      if (anchored_id != -1) {
+        // std::cerr << anchored_id << " " << char256_table[res[i].base] << "  " << cur_id << "\n";
+        add_adj(seq_id, anchored_id, cur_id, curPos++);
+      }
     }
     anchored_id = cur_id;
   }

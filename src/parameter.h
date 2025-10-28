@@ -12,5 +12,6 @@ struct para_t {
   bool progressive_poa;
   int result; // result format 0 consensus,1 rc-msa
   int verbose;  //verbose level (0-2). 0: none, 1: information, 2: debug
+  std::string  inc_fp;
 };
 #endif

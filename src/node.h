@@ -16,6 +16,7 @@ struct node_t {
   node_t(int _id, unsigned char _base, int m) {
     base = _base;
     id = par_id = _id;
+    ind = 0;
     aligned_node.resize(m, -1);
     aligned_node[base] = id;
   }

@@ -19,7 +19,8 @@ int main(int argc, char** argv) {
   cxxopts::Options options("POA", "A multiple sequence alignment tool");
 
   options.add_options()
-    ("i,input", "input path", cxxopts::value<std::string>())
+    ("input", "input path", cxxopts::value<std::string>())
+    ("i,inc_fp", "incrementally align sequences to an existing graph/MSA", cxxopts::value<std::string>())
     ("m,mat_fp", "match file path", cxxopts::value<std::string>())
     ("M,match", "match sorce", cxxopts::value<int>()->default_value("2"))
     ("X,mismatch", "mismatch sorce", cxxopts::value<int>()->default_value("-4"))
@@ -37,6 +38,7 @@ int main(int argc, char** argv) {
     ("V,verbose", "verbose level (0-2). 0: none, 1: information, 2: debug [0]\n", cxxopts::value<int>()->default_value("0"))
     ("h,help", "Print usage")
     ;
+  options.parse_positional({ "input" });
   int thread, sample_num;
   std::string path;
   para_t* para = new para_t();
@@ -51,6 +53,8 @@ int main(int argc, char** argv) {
       path = result["input"].as<std::string>();
     if (result.count("mat_fp"))
       para->mat_fp = result["mat_fp"].as<std::string>();
+    if (result.count("inc_fp"))
+      para->inc_fp = result["inc_fp"].as<std::string>();
     para->match = result["match"].as<int>();
     para->mismatch = result["mismatch"].as<int>();
     para->gap_open1 = result["gap_open"].as<int>();
@@ -76,8 +80,15 @@ int main(int argc, char** argv) {
 
   // handle input
   std::vector<seq_t> seqs;
+  graph* DAG = new graph();
+  DAG->init(para);
+  if (!para->inc_fp.empty()) seqs = read_gfa(para, DAG, para->inc_fp.c_str());
+  // std::cerr << DAG->node.size() << "\n";
+  // return 0;
+  int exist_seq_num = seqs.size();
   try {
-    seqs = readFile(path.c_str());
+    readFile(seqs, path.c_str());
+    // std::cerr << exist_seq_num << " " << seqs.size() << " " << DAG->node.size() << "\n";
   }
   catch (const std::exception& e) {
     std::cerr << "error read file: " << e.what() << std::endl;
@@ -86,12 +97,11 @@ int main(int argc, char** argv) {
   // std::cerr << seqs.size() << "\n";
   // seqs.resize(660);
   // handle alignment 
-  graph* DAG = new graph();
   // std::sort(ord.begin(), ord.end(), [&](const int& i, const int& j) {
   //   return  seqs[i].seq.size() > seqs[j].seq.size();
   // });
   minimizer_t* mm = new minimizer_t(para, seqs);
-  if (para->progressive_poa) {
+  if (para->inc_fp.empty() && para->progressive_poa) {
     std::cerr << "progressive" << "\n";
     mm->get_guide_tree(para);
     // std::reverse(ord.begin(), ord.end());
@@ -102,19 +112,17 @@ int main(int argc, char** argv) {
   const std::vector<int>& ord = mm->ord;
   // std::cerr << mm.mm_v.n << "\n";
 
-
+  int rid;
   // for (int i = 0; i < seqs.size(); i++) {
   //   std::cout << i << " " << ord[i] << " " << seqs[ord[i]].seq.size() << "\n";
   // }
   // std::cerr << "poa" << "\n";
-  int rid = ord[0];
-  DAG->init(para, rid, seqs[rid].seq);
   // seqs[0].seq = "TTGCCCTT";
   // seqs[1].seq = "CCAATTTT";
   // seqs[2].seq = "TGCT";
   if (!thread) { // 
     aligned_buff_t mpool;
-    for (int i = 1; i < seqs.size(); i++) {  //seqs.size()
+    for (int i = exist_seq_num; i < seqs.size(); i++) {  //seqs.size()
       rid = ord[i];
       if (para->verbose && i % 10 == 0) {
         std::cerr << "[" << i << "/" << seqs.size() << "]" << "\n";
@@ -147,7 +155,7 @@ int main(int argc, char** argv) {
     // std::cerr << "thread:" << thread << "\n";
     std::vector<std::future<std::vector<res_t>> > results;
     // sample_num = 0;
-    for (int i = 1; i < seqs.size() && i <= sample_num; i++) { // ensure parallel before DAG have the enough sample seq
+    for (int i = exist_seq_num; i < seqs.size() && i - exist_seq_num < sample_num; i++) { // ensure parallel before DAG have the enough sample seq
       rid = ord[i];
       if (para->verbose && i % 10 == 0) {
         std::cerr << "[" << i << "/" << seqs.size() << "]" << "\n";
@@ -168,7 +176,7 @@ int main(int argc, char** argv) {
       // std::cerr << "topsort" << "\n";
       DAG->topsort(i + 1 == seqs.size(), para->f);
     }
-    for (int i = sample_num + 1; i < seqs.size(); i += thread) {  //seqs.size()
+    for (int i = exist_seq_num + sample_num; i < seqs.size(); i += thread) {  //seqs.size()
       results.clear();
       for (int j = 0; j < thread && i + j < seqs.size(); j++) {
         rid = ord[i + j];
@@ -202,7 +210,6 @@ int main(int argc, char** argv) {
       }
       // std::cerr << "topsort:" << "\n";
       DAG->topsort(i + thread >= seqs.size(), para->f);
-
       // std::cerr << "poa" << "\n";
       // POA_SIMD(para, DAG, tseq);
       // std::vector<res_t> res = POA(para, DAG, tseq);
@@ -216,6 +223,7 @@ int main(int argc, char** argv) {
     delete[] mpool;
     // std::cerr << "finish" << "\n";
   }
+  // std::cerr << "out_put" << "\n";
   if (para->result == 0) DAG->output_consensus();
   else if (para->result == 1) DAG->output_rc_msa(mm->rid_to_ord, seqs);
 
