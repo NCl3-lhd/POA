@@ -21,7 +21,9 @@ struct graph {
   void topsort(int op, int para_f);
   void output_rc_msa(const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs);
   void output_consensus();
+  void output_gfa(const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs);
   std::vector<int> calculateR() const;
+  bool is_topsorted; //
 };
 // std::vector<sequence> readFile(const char* path);
 #endif

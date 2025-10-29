@@ -154,7 +154,6 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
   assert(seq[0] == para->m - 1);
   std::vector<res_t> res;
   if (n <= 2) {
-    std::cerr << n << "\n";
     res.emplace_back(res_t(0, seq[0]));
     for (int j = 1; j < m; j++) {
       res.emplace_back(res_t(-1, seq[j]));

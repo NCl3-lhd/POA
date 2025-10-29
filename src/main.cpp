@@ -34,7 +34,7 @@ int main(int argc, char** argv) {
     ("w,window", "k_mer_window lenth", cxxopts::value<int>()->default_value("10"))
     ("s,sample_num", "sample_num", cxxopts::value<int>()->default_value("50"))
     ("p,progressive_poa", "is progressive_poa", cxxopts::value<bool>()->default_value("false"))
-    ("r,result", "result format", cxxopts::value<int>()->default_value("0"))
+    ("r,result", "result format (0-2). 0: consensus, 1: rc-msa, 2: gfa", cxxopts::value<int>()->default_value("0"))
     ("V,verbose", "verbose level (0-2). 0: none, 1: information, 2: debug [0]\n", cxxopts::value<int>()->default_value("0"))
     ("h,help", "Print usage")
     ;
@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
   // return 0;
   int exist_seq_num = seqs.size();
   try {
-    readFile(seqs, path.c_str());
+    if (!path.empty()) readFile(seqs, path.c_str());
     // std::cerr << exist_seq_num << " " << seqs.size() << " " << DAG->node.size() << "\n";
   }
   catch (const std::exception& e) {
@@ -226,6 +226,7 @@ int main(int argc, char** argv) {
   // std::cerr << "out_put" << "\n";
   if (para->result == 0) DAG->output_consensus();
   else if (para->result == 1) DAG->output_rc_msa(mm->rid_to_ord, seqs);
+  else if (para->result == 2) DAG->output_gfa(mm->rid_to_ord, seqs);
 
 
   // std::cout << "correct check" << "\n";

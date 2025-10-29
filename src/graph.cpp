@@ -52,6 +52,7 @@ void graph::topsort(int op, int para_f) { // if op == 1, is not normal topsort, 
         }
       }
     }
+    is_topsorted = true;
     return;
   }
 
@@ -77,7 +78,7 @@ void graph::topsort(int op, int para_f) { // if op == 1, is not normal topsort, 
       }
     }
   }
-
+  is_topsorted = true;
   // for (int i = 0; i < rank.size(); i++) {
   //   std::cerr << rank[i] << " ";
   // }
@@ -225,11 +226,13 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
     anchored_id = cur_id;
   }
   add_adj(seq_id, anchored_id, 1, curPos); // anchored -> sink
+  is_topsorted = false;
   // std::cerr << "finish add path" << "\n";
 }
 
 void graph::output_rc_msa(const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs) {
   // std::cerr << seqs.size() << " " << rank.size() << "\n";
+  if (is_topsorted == false) topsort(1, 0);
   std::vector<std::string> res(seqs.size(), std::string(rank.size() - 2, '-'));
   for (int i = 0; i < node.size(); i++) {
     int rank = node[node[i].par_id].rank;
@@ -332,4 +335,81 @@ void graph::output_consensus() {
   std::cout << ">" << "consensus sequence" << "\n";
   std::cout << consensus << "\n";
   return;
+}
+void graph::output_gfa(const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs) {
+  if (node.size() <= 2) return;
+
+  // traverse graph 
+  // int* in_degree = (int*)_err_malloc(abg->node_n * sizeof(int));
+  int n_seq = seqs.size();
+  std::vector<int> deg(node.size());
+  // int** read_paths = (int**)_err_malloc(n_seq * sizeof(int*)), * read_path_i = (int*)_err_calloc(n_seq, sizeof(int));
+  int i, j, cur_id, pre_id, out_id;
+  for (i = 0; i < node.size(); ++i) deg[i] = node[i].in.size();
+  std::vector<std::vector<int>> read_paths(seqs.size());
+  for (i = 0; i < n_seq; ++i) read_paths[i].resize(seqs[rid_to_ord[i]].seq.size());  // i is ord
+
+  // output comment and header
+  std::cout << "H\tVN:Z:1.0" << "\n";
+
+  std::queue<int> q;
+  // Breadth-First-Search
+  q.push(0);
+  while (q.size() != 0) {
+    cur_id = q.front();
+    q.pop();
+    if (cur_id == 1) {
+      break;
+    }
+    else {
+      if (cur_id != 0) {
+        // output node
+        // fprintf(out_fp, "S\t%d\t%c\n", cur_id - 1, ab_char256_table[abg->node[cur_id].base]);
+        std::cout << "S\t" << cur_id - 1 << "\t" << char256_table[node[cur_id].base] << "\n";
+        // output all links based pre_ids
+        for (i = 0; i < node[cur_id].in.size(); ++i) {
+          pre_id = node[cur_id].in[i];
+          if (pre_id != 0) {
+            // fprintf(out_fp, "L\t%d\t+\t%d\t+\t0M\n", pre_id - 1, cur_id - 1);
+            std::cout << "L\t" << pre_id - 1 << "\t" << "+\t" << cur_id - 1 << "\t" << "+\t0M\n";
+          }
+        }
+        // add node id to read path
+        for (int j = 0; j < node[cur_id].ids.size(); j++) {
+          int id = node[cur_id].ids[j];
+          int idp = node[cur_id].idp[j];
+          read_paths[id][idp] = cur_id - 1;
+        }
+      }
+      for (i = 0; i < node[cur_id].out.size(); ++i) {
+        out_id = node[cur_id].out[i];
+        if (--deg[out_id] == 0) {
+          q.push(out_id);
+        }
+      }
+    }
+  }
+  // output read paths
+  // std::cerr << "output read paths" << "\n";
+  for (i = 0; i < n_seq; ++i) {
+    if (seqs[i].name.size() > 0) {
+      // fprintf(out_fp, "P\t%s\t", abs->name[i].s);
+      std::cout << "P\t" << seqs[i].name << "\t";
+    }
+    else {
+      std::cout << "P\t" << i + 1 << "\t";
+    }
+    for (j = 0; j < read_paths[i].size(); ++j) {
+      // fprintf(out_fp, "%d+", read_paths[i][j]);
+      std::cout << read_paths[rid_to_ord[i]][j] << "+";
+      if (j != int(read_paths[i].size()) - 1) {
+        // fprintf(out_fp, ",");
+        std::cout << ",";
+      }
+      else {
+        // fprintf(out_fp, "\t*\n");
+        std::cout << "\t*\n";
+      }
+    }
+  }
 }
