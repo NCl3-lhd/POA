@@ -274,7 +274,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
     // block_s = Bs[i] / reg_size, block_e = Be[i] / reg_size + 1; // [block_s,block_e)
     // std::cerr << "B:" << m << " " << w << " " << tbs << " " << tbe << '\n';
 
-    if (para->f > 0 && para->enable_seeding) {  // adptive band
+    if (para->f > 0 && para->ab_band) {  // adptive band
       // int pmid = (Pl[i] + Pr[i]) / 2;
       // int tms = std::min({ Pl[i], DAG->hlen[i] + Ol[i], m - DAG->tlen[i] }), tme = std::max({ Pr[i], DAG->hlen[i] + Or[i], m - DAG->tlen[i] });
       // int len = std::max(pmid - tms + 1, tme - pmid);
@@ -366,7 +366,7 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
     }
     _mm256_store_si256((reg*)(I_i + block_num * reg_size), Neg_inf);
 
-    if (para->f > 0 && para->enable_seeding) {
+    if (para->f > 0 && para->ab_band) {
       int max_j = 0;
       for (int j = 1; j < block_num* reg_size; j++) { // block_num * reg_size
         max_j = M_i[j] > M_i[max_j] ? j : max_j;
