@@ -130,16 +130,18 @@ int main(int argc, char** argv) {
         std::cerr << "[" << i << "/" << seqs.size() << "]" << "\n";
       }
 
-      std::string tseq;
-      tseq += char26_table['N'];
-      for (int j = 0; j < seqs[rid].seq.size(); j++) {
-        tseq += char26_table[seqs[rid].seq[j]];
-      }
+      // std::string tseq;
+      // tseq += char26_table['N'];
+      // for (int j = 0; j < seqs[rid].seq.size(); j++) {
+      //   tseq += char26_table[seqs[rid].seq[j]];
+      // }
       // std::cerr << "poa" << "\n";
       // POA_SIMD(para, DAG, tseq);
       // std::vector<res_t> res = POA(para, DAG, tseq);
       // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
-      std::vector<res_t> res = abPOA(para, DAG, mm, rid, tseq, &mpool);
+      // std::vector<res_t> res = abPOA(para, DAG, mm, rid, tseq, &mpool);
+
+      std::vector<res_t> res = alignment(para, DAG, mm, rid, seqs[rid].seq, &mpool);
       // return 0;
       // std::cerr << "add_path" << "\n";
       DAG->add_path(para->m, i, res);
@@ -162,16 +164,17 @@ int main(int argc, char** argv) {
       if (para->verbose && i % 10 == 0) {
         std::cerr << "[" << i << "/" << seqs.size() << "]" << "\n";
       }
-      std::string tseq;
-      tseq += char26_table['N'];
-      for (int j = 0; j < seqs[rid].seq.size(); j++) {
-        tseq += char26_table[seqs[rid].seq[j]];
-      }
+      // std::string tseq;
+      // tseq += char26_table['N'];
+      // for (int j = 0; j < seqs[rid].seq.size(); j++) {
+      //   tseq += char26_table[seqs[rid].seq[j]];
+      // }
       // std::cerr << "poa" << "\n";
       // POA_SIMD(para, DAG, tseq);
       // std::vector<res_t> res = POA(para, DAG, tseq);
       // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
-      std::vector<res_t> res = abPOA(para, DAG, mm, rid, tseq, &mpool[0]);
+      // std::vector<res_t> res = abPOA(para, DAG, mm, rid, tseq, &mpool[0]);
+      std::vector<res_t> res = alignment(para, DAG, mm, rid, seqs[rid].seq, &mpool[0]);
       // return 0;
       // std::cerr << "add_path" << "\n";
       DAG->add_path(para->m, i, res);
@@ -187,12 +190,13 @@ int main(int argc, char** argv) {
         aligned_buff_t* cur_mpool = &mpool[j];
         results.emplace_back(
           pool.enqueue([para, DAG, mm, rid, &seq_i, cur_mpool] {
-          std::string tseq;
-          tseq += char26_table['N'];
-          for (int j = 0; j < seq_i.size(); j++) {
-            tseq += char26_table[seq_i[j]];
-          }
-          std::vector<res_t> res = abPOA(para, DAG, mm, rid, tseq, cur_mpool);
+          // std::string tseq;
+          // tseq += char26_table['N'];
+          // for (int j = 0; j < seq_i.size(); j++) {
+          //   tseq += char26_table[seq_i[j]];
+          // }
+          // std::vector<res_t> res = abPOA(para, DAG, mm, rid, tseq, cur_mpool);
+          std::vector<res_t> res = alignment(para, DAG, mm, rid, seq_i, cur_mpool);
           return res;
         }));
       }
