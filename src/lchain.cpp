@@ -114,7 +114,6 @@ mm128_t* mg_chain_backtrack(void* km, int64_t n, const int32_t* f, const mm128_t
 static mm128_t* compact_a(void* km, int32_t n_u, mm128_t* u, int32_t n_v, int32_t* v, mm128_t* a)
 {
   mm128_t* b, * w;
-  uint64_t* u2;
   int64_t i, j, k;
 
   // write the result to b[]
@@ -126,7 +125,6 @@ static mm128_t* compact_a(void* km, int32_t n_u, mm128_t* u, int32_t n_v, int32_
       b[k++] = a[v[j]];
   }
   kfree(km, v);
-  memcpy(u, u2, n_u * 8);
   memcpy(b, a, k * sizeof(mm128_t)); // write _a_ to _b_ and deallocate _a_ because _a_ is oversized, sometimes a lot
   kfree(km, a);
   return b;
