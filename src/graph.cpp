@@ -18,7 +18,7 @@ void graph::add_adj(int seq_id, int from, int to, int curPos) {
   node[from].add_out_adj(seq_id, to);
   node[to].add_in_adj(seq_id, from, curPos);
 }
-void graph::topsort(int op, int para_f) { // if op == 1, is not normal topsort, the node_id in queue must be the parent
+void graph::topsort(const para_t* para, int op) { // if op == 1, is not normal topsort, the node_id in queue must be the parent
   std::vector<int> stk;
   std::vector<int> deg(node.size());
   if (op == 1) {
@@ -64,6 +64,10 @@ void graph::topsort(int op, int para_f) { // if op == 1, is not normal topsort, 
   }
 
   rank.clear();
+  if (para->enable_seeding) {
+    cons.clear();
+    cons_pos_to_id.clear();
+  }
   while (stk.size()) {
     int u = stk.back();
     stk.pop_back();
@@ -71,6 +75,10 @@ void graph::topsort(int op, int para_f) { // if op == 1, is not normal topsort, 
     // std::cerr << u << " ";
     cur.rank = rank.size();
     rank.emplace_back(u);
+    if (para->enable_seeding && cur.id != 1) {  // sink not in cons
+      cons.push_back(char256_table[cur.base]);
+      cons_pos_to_id.push_back(cur.id);
+    }
     for (int i = 0; i < cur.out.size(); i++) {
       int v = cur.out[i];
       if (--deg[v] == 0) {
@@ -83,7 +91,7 @@ void graph::topsort(int op, int para_f) { // if op == 1, is not normal topsort, 
   //   std::cerr << rank[i] << " ";
   // }
   // std::cerr << rank.size() << " " << node.size() << "\n";
-  if (para_f > 0) {
+  if (para->f > 0) {
     hlen.resize(node.size());
     for (int i = 0; i < rank.size(); i++) { // ni topsort id dp
       int u = rank[i];
@@ -161,7 +169,7 @@ void graph::init(para_t* para, int seq_id, const std::string& str) {
     pre_id = cur_id;
   }
   add_adj(0, pre_id, 1, str.size()); // 
-  topsort(0, para_f);
+  topsort(para, 0);
 }
 void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int graph_node_num) {
   // node_h.emplace_back(node.size());
@@ -230,9 +238,9 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
   // std::cerr << "finish add path" << "\n";
 }
 
-void graph::output_rc_msa(const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs) {
+void graph::output_rc_msa(para_t* para, const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs) {
   // std::cerr << seqs.size() << " " << rank.size() << "\n";
-  if (is_topsorted == false) topsort(1, 0);
+  if (is_topsorted == false) topsort(para, 1);
   std::vector<std::string> res(seqs.size(), std::string(rank.size() - 2, '-'));
   for (int i = 0; i < node.size(); i++) {
     int rank = node[node[i].par_id].rank;

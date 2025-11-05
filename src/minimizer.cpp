@@ -4,9 +4,8 @@
 #include <iostream>
 #include "sequence.h"
 #include "kvec.h"
-#include "ksort.h"
 #include <numeric>
-
+#include "lchain.h"
 /* modified from lh3/minimap2/sketch.c */
 /********** start *************/
 static inline uint64_t hash64(uint64_t key, uint64_t mask)
@@ -139,10 +138,9 @@ void mm_sketch(void* km, const char* str, int len, int w, int k, uint32_t rid, i
 /* modified from yangao07/abPOA/abpoa_seed.c */
 #define sort_key_mm128x(a) ((a).x)
 KRADIX_SORT_INIT(mm128x, mm128_t, sort_key_mm128x, 8)
-
 /********** start *************/
 int minimizer_t::collect_mm(void* km, const std::vector<seq_t>& seqs, para_t* para) {
-  mm_h = (int*)malloc((seqs_size + 1) * sizeof(int));
+  mm_h = (int*)malloc((seqs_size + 2) * sizeof(int));
   mm_h[0] = 0; // record mm i
   for (int i = 0; i < seqs.size(); ++i) { // collect minimizers
     // if (abpt->m > 5) mm_aa_sketch(km, seqs[i], seq_lens[i], abpt->w, abpt->k, i, 0, mm);
@@ -394,6 +392,54 @@ minimizer_t::~minimizer_t() {
   // std::cerr << 2 << "\n";
 
 }
+/*
+  minimizers
+  mm->a[i].x = kMer<<8 | kmerSpan
+  mm->a[i].y = rid<<32 | lastPos<<1 | strand
+  anchors
+  a[].x: rev<<63 | tid<<32 | tpos
+  a[].y: qid << 48 | flags<<40 | q_span<<32 | qpos
+*/
+int minimizer_t::collect_anchors(mm128_v* anchors, int tid, int qid, int qlen) {
+  int i = mm_h[tid], j = mm_h[qid], _i, _j;
+  while (i < mm_h[tid + 1] && j < mm_h[qid + 1]) {
+    uint64_t xi = sorted_mm_v.a[i].x, xj = sorted_mm_v.a[j].x;
+    if (xi == xj) {
+      int _i = i;
+      for (; _i < mm_h[tid + 1]; ++_i) {
+        uint64_t _xi = sorted_mm_v.a[_i].x;
+        if (_xi != xi) break;
+        uint64_t _yi = sorted_mm_v.a[_i].y;
+        uint32_t tpos = _yi >> 32;
+        for (_j = j; _j < mm_h[qid + 1]; ++_j) {
+          uint64_t _xj = sorted_mm_v.a[_j].x;
+          if (_xj != xj) break;
+          uint64_t _yj = sorted_mm_v.a[_j].y;
+          // t_strand<<63 | t_lastPos<<32 | q_lastPos
+          mm128_t anchor;
+          uint32_t qspan = _xj && 0xff;
+          if ((_yi & 1) == (_yj & 1)) { // same strand
+            // p->x = (r & 0xffffffff00000000ULL) | rpos;
+            // p->y = (uint64_t)q->q_span << 32 | q->q_pos >> 1;
+            anchor.x = (_xi & 0xffffffff00000000ULL) | ((uint32_t)_yi >> 1);
+            anchor.y = (uint64_t)qspan << 32 | ((uint32_t)_yj >> 1);
+          }
+          else { // different strand
+            anchor.x = 1ULL << 63 | (_xi & 0xffffffff00000000ULL) | ((uint32_t)_yi >> 1);
+            anchor.y = (uint64_t)qspan << 32 | (qlen - (((uint32_t)_yj >> 1) + 1 - qspan) - 1);
+          }
+          kv_push(mm128_t, km, *anchors, anchor);
+        }
+      }
+      i = _i, j = _j;
+    }
+    else if (xi < xj) ++i;
+    else if (xj < xi) ++j;
+  }
+  // sort by tpos
+  radix_sort_mm128x(anchors->a, anchors->a + anchors->n);
+  return anchors->n;
+}
 /************ end *************/
 
 
@@ -443,3 +489,39 @@ mm128_t minimizer_t::match_mm(uint64_t mm_x, int rid) const {
   }
   return sorted_mm_v.a[l];
 };
+
+int minimizer_t::dp_chaining(const para_t* para, mm128_v* anchors, int tlen, int qlen) {
+  // mg_lchain_dp
+  int min_w = 500 + para->k;  // para->min_w
+  int max_bw = 100, max_dis = 100, max_skip_anchors = 25, max_non_best_anchors = 50, min_local_chain_cnt = 3, min_local_chain_score = 100;
+  float chn_pen_gap = 0.8 * 0.01 * para->k, chn_pen_skip = 0.0 * 0.01 * para->k;
+  int n_lchains;
+  mm128_t* lchains;
+
+  anchors->a = mg_lchain_dp(max_dis, max_dis, max_bw, max_skip_anchors, max_non_best_anchors, min_local_chain_cnt, min_local_chain_score, chn_pen_gap, chn_pen_skip, 0, 1, &anchors->n, anchors->a, &n_lchains, &lchains, km);
+
+  // sort a by tpos
+  radix_sort_mm128x(lchains, lchains + n_lchains);
+  // get a complete chain
+  chain_dp(km, lchains, n_lchains, anchors, min_w, tlen, qlen, max_dis, max_dis, max_bw, chn_pen_gap, chn_pen_skip, 0, 1);
+  
+  kfree(km, lchains);
+  return 0;
+}
+
+mm128_v minimizer_t::collect_anchors_bycons(const para_t* para, int qid, int qlen, const std::string& cons) {
+  // collect cons 's minimizer
+  int n = seqs_size; // cons 's rid
+  mm_v.n = mm_h[n];
+  if (para->m <= 5) mm_sketch(km, cons.c_str(), cons.size(), para->w, para->k, n, 0, &mm_v);
+  mm_h[n + 1] = mm_v.n;
+
+  sorted_mm_v.n = mm_h[n];
+  for (int i = mm_h[n]; i < (int)mm_v.n; ++i) kv_push(mm128_t, km, sorted_mm_v, mm_v.a[i]);
+  radix_sort_mm128x(sorted_mm_v.a + mm_h[n], sorted_mm_v.a + mm_h[n + 1]);
+  // collect anchor between _seq and cons
+  mm128_v anchors = { 0, 0, 0 };
+  collect_anchors(&anchors, n, qid, qlen);
+  dp_chaining(para, &anchors, cons.size(), qlen);
+  return anchors;
+}

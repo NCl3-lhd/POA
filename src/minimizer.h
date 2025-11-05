@@ -2,10 +2,9 @@
 #define MINIMIZER_H
 #include "parameter.h"
 #include "sequence.h"
-#include <cstdint>
+#include "ksort.h"
+#include "mmpriv.h"
 
-typedef struct { uint64_t x, y; } mm128_t;
-typedef struct { size_t n, m; mm128_t* a; } mm128_v;
 void mm_sketch(void* km, const char* str, int len, int w, int k, uint32_t rid, int is_hpc, mm128_v* p);
 struct minimizer_t {
   void* km;
@@ -17,6 +16,7 @@ struct minimizer_t {
   std::vector<int> max_sim; // is seq_id;
   std::vector<int> ord; // index is rid
   std::vector<int> rid_to_ord; // index is ord rid -> ord
+
   minimizer_t(para_t* para, const std::vector<seq_t>& seqs);
   ~minimizer_t();
   void init(para_t* para, const std::vector<seq_t>& seqs);
@@ -25,6 +25,10 @@ struct minimizer_t {
   mm128_t find_mm(int& idx, int rid, int tarPos) const;
   mm128_t find_mm(int rid, int tarPos) const;
   mm128_t match_mm(uint64_t mm_x, int rid) const;
+  int collect_anchors(mm128_v* anchors, int tid, int qid, int qlen);
+  int dp_chaining(const para_t* para, mm128_v* anchors, int tlen, int qlen);
+  mm128_v collect_anchors_bycons(const para_t* para, int qid, int qlen, const std::string& cons);
+  // int collect_anchors(void* km, mm128_v* anchors, mm128_v mm, int* mm_c, int tid, int qid, int qlen, int k);
 };
 // std::vector<sequence> readFile(const char* path);
 #endif

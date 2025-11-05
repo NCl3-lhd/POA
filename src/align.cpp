@@ -1979,8 +1979,10 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   std::reverse(res.begin(), res.end());
   return res;
 }
+// #define sort_key_mm128x(a) ((a).x)
+// KRADIX_SORT_INIT(mm128x, mm128_t, sort_key_mm128x, 8)
 
-std::vector<res_t> alignment(const para_t* para, const graph* DAG, const minimizer_t* mm, int rid, const std::string& _seq, aligned_buff_t* mpool) {
+std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, int rid, const std::string& _seq, aligned_buff_t* mpool) {
   std::string tseq;
   // tseq += char26_table['N'];
   for (int j = 0; j < _seq.size(); j++) {
@@ -2010,5 +2012,12 @@ std::vector<res_t> alignment(const para_t* para, const graph* DAG, const minimiz
     // return abPOA(para, DAG, mm, rid, tseq, mpool);
   }
   // para->enable_seeding
+  if (!DAG->is_topsorted) DAG->topsort(para, 0);
+
+
+  mm->collect_anchors_bycons(para, rid, _seq.size(), DAG->cons);
+
+  // free anchors
+  // kfree(anchors.a)
   return res;
 }

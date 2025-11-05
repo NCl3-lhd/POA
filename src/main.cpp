@@ -146,7 +146,7 @@ int main(int argc, char** argv) {
       // std::cerr << "add_path" << "\n";
       DAG->add_path(para->m, i, res);
       // std::cerr << "topsort" << "\n";
-      DAG->topsort(i + 1 == seqs.size(), para->f);
+      DAG->topsort(para, i + 1 == seqs.size());
       // std::cout << i << " " << DAG->rank.size() << "\n";
     }
     // handle output 
@@ -179,7 +179,7 @@ int main(int argc, char** argv) {
       // std::cerr << "add_path" << "\n";
       DAG->add_path(para->m, i, res);
       // std::cerr << "topsort" << "\n";
-      DAG->topsort(i + 1 == seqs.size(), para->f);
+      DAG->topsort(para, i + 1 == seqs.size());
     }
     for (int i = exist_seq_num + sample_num; i < seqs.size(); i += thread) {  //seqs.size()
       results.clear();
@@ -215,7 +215,7 @@ int main(int argc, char** argv) {
         DAG->add_path(para->m, i + j, res[j], node_num);
       }
       // std::cerr << "topsort:" << "\n";
-      DAG->topsort(i + thread >= seqs.size(), para->f);
+      DAG->topsort(para, i + thread >= seqs.size());
       // std::cerr << "poa" << "\n";
       // POA_SIMD(para, DAG, tseq);
       // std::vector<res_t> res = POA(para, DAG, tseq);
@@ -231,7 +231,7 @@ int main(int argc, char** argv) {
   }
   // std::cerr << "out_put" << "\n";
   if (para->result == 0) DAG->output_consensus();
-  else if (para->result == 1) DAG->output_rc_msa(mm->rid_to_ord, seqs);
+  else if (para->result == 1) DAG->output_rc_msa(para, mm->rid_to_ord, seqs);
   else if (para->result == 2) DAG->output_gfa(mm->rid_to_ord, seqs);
 
 

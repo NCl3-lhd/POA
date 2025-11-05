@@ -484,7 +484,7 @@ std::vector<seq_t> read_gfa(para_t* para, graph* DAG, const char* path) {
   }
   // if (is_fa && fa_seg) gfa_update_fa_seq(g, fa_seg, fa_seq.l, fa_seq.s);
   // std::cerr << "topsort" << "\n";
-  DAG->topsort(0, para->f);
+  DAG->topsort(para, 0);
   free(fa_seq.s);
   free(line.s);
   // gfa_finalize(g);
