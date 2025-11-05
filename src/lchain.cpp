@@ -326,4 +326,5 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
   *_anchors = anchors;
   kfree(km, f);
   kfree(km, chain_score), kfree(km, pre_chain);
+  return 0;
 }

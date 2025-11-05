@@ -2015,9 +2015,29 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
   if (!DAG->is_topsorted) DAG->topsort(para, 0);
 
 
-  mm->collect_anchors_bycons(para, rid, _seq.size(), DAG->cons);
-
+  mm128_v anchors = mm->collect_anchors_bycons(para, rid, _seq.size(), DAG->cons);
+  int beg_id = 0, beg_qpos = 0, end_id = -1, end_tpos = -1, end_qpos = -1;
+  int j = 0;
+  for (int i = 0; i < anchors.n; i++) {
+    uint64_t xi = anchors.a[i].x, yi = anchors.a[i].y;
+    int q_span = yi >> 32 & 0xff;
+    end_tpos = xi - q_span + 1, end_qpos = yi - q_span + 1;
+    end_id = DAG->cons_pos_to_id[end_tpos];
+    int qlen = end_qpos - beg_qpos;
+    std::vector<res_t> t_res = poa(para, DAG, beg_id, end_id, rid, tseq.c_str() + j, qlen, mpool);
+    res.insert(res.end(), t_res.begin(), t_res.end());
+    j += qlen;
+    for (int k = 0; k < q_span; k++, j++) {
+      end_id = DAG->cons_pos_to_id[end_tpos + k];
+      const node_t& cur = DAG->node[end_id];
+      res.emplace_back(res_t(cur.id, cur.base));
+    }
+    beg_id = end_id;beg_qpos = j;
+  }
+  int qlen = tseq.size() - beg_qpos;
+  std::vector<res_t> t_res = poa(para, DAG, beg_id, 1, rid, tseq.c_str() + j, qlen, mpool);
+  res.insert(res.end(), t_res.begin(), t_res.end());
   // free anchors
-  // kfree(anchors.a)
+  kfree(mm->km, anchors.a);
   return res;
 }

@@ -75,7 +75,7 @@ void graph::topsort(const para_t* para, int op) { // if op == 1, is not normal t
     // std::cerr << u << " ";
     cur.rank = rank.size();
     rank.emplace_back(u);
-    if (para->enable_seeding && cur.id != 1) {  // sink not in cons
+    if (para->enable_seeding && cur.id != 0 && cur.id != 1) {  // sink not in cons
       cons.push_back(char256_table[cur.base]);
       cons_pos_to_id.push_back(cur.id);
     }
