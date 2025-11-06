@@ -140,13 +140,14 @@ void mm_sketch(void* km, const char* str, int len, int w, int k, uint32_t rid, i
 KRADIX_SORT_INIT(mm128x, mm128_t, sort_key_mm128x, 8)
 /********** start *************/
 int minimizer_t::collect_mm(void* km, const std::vector<seq_t>& seqs, para_t* para) {
+
   mm_h = (int*)malloc((seqs_size + 2) * sizeof(int));
   mm_h[0] = 0; // record mm i
   for (int i = 0; i < seqs.size(); ++i) { // collect minimizers
     // if (abpt->m > 5) mm_aa_sketch(km, seqs[i], seq_lens[i], abpt->w, abpt->k, i, 0, mm);
     // std::cerr << i << " " << para->m << "\n";
     // std::cerr << i << "\n";
-    if (para->m <= 5) mm_sketch(km, seqs[i].seq.c_str(), seqs[i].seq.size(), para->w, para->k, i, 0, &mm_v);
+    if (para->m <= 5) mm_sketch(km, seqs[i].seq.c_str(), seqs[i].seq.size(), para->mm_w, para->k, i, 0, &mm_v);
     mm_h[i + 1] = mm_v.n;
   }
   return mm_v.n;
@@ -165,7 +166,7 @@ void minimizer_t::init(para_t* para, const std::vector<seq_t>& seqs) {
   rid_to_ord.resize(seqs_size);
   std::iota(ord.begin(), ord.end(), 0);
   std::iota(rid_to_ord.begin(), rid_to_ord.end(), 0);
-  if (para->progressive_poa) {
+  if (para->progressive_poa || para->enable_seeding) {
     km = km_init();
     collect_mm(km, seqs, para);//mm ->Minimizer
     maxl = 0;
@@ -410,7 +411,6 @@ int minimizer_t::collect_anchors(mm128_v* anchors, int tid, int qid, int qlen) {
         uint64_t _xi = sorted_mm_v.a[_i].x;
         if (_xi != xi) break;
         uint64_t _yi = sorted_mm_v.a[_i].y;
-        uint32_t tpos = _yi >> 32;
         for (_j = j; _j < mm_h[qid + 1]; ++_j) {
           uint64_t _xj = sorted_mm_v.a[_j].x;
           if (_xj != xj) break;
@@ -421,11 +421,11 @@ int minimizer_t::collect_anchors(mm128_v* anchors, int tid, int qid, int qlen) {
           if ((_yi & 1) == (_yj & 1)) { // same strand
             // p->x = (r & 0xffffffff00000000ULL) | rpos;
             // p->y = (uint64_t)q->q_span << 32 | q->q_pos >> 1;
-            anchor.x = (_xi & 0xffffffff00000000ULL) | ((uint32_t)_yi >> 1);
+            anchor.x = (_yi & 0x7fffffff00000000ULL) | ((uint32_t)_yi >> 1);
             anchor.y = (uint64_t)qspan << 32 | ((uint32_t)_yj >> 1);
           }
           else { // different strand
-            anchor.x = 1ULL << 63 | (_xi & 0xffffffff00000000ULL) | ((uint32_t)_yi >> 1);
+            anchor.x = 1ULL << 63 | (_yi & 0xffffffff00000000ULL) | ((uint32_t)_yi >> 1);
             anchor.y = (uint64_t)qspan << 32 | (qlen - (((uint32_t)_yj >> 1) + 1 - qspan) - 1);
           }
           kv_push(mm128_t, km, *anchors, anchor);
@@ -492,36 +492,55 @@ mm128_t minimizer_t::match_mm(uint64_t mm_x, int rid) const {
 
 int minimizer_t::dp_chaining(const para_t* para, mm128_v* anchors, int tlen, int qlen) {
   // mg_lchain_dp
-  int min_w = 500 + para->k;  // para->min_w
+  int min_w = para->poa_w + para->k;
   int max_bw = 100, max_dis = 100, max_skip_anchors = 25, max_non_best_anchors = 50, min_local_chain_cnt = 3, min_local_chain_score = 100;
   float chn_pen_gap = 0.8 * 0.01 * para->k, chn_pen_skip = 0.0 * 0.01 * para->k;
   int n_lchains;
   mm128_t* lchains;
+  if (para->verbose) std::cerr << "initial anchor size:" << anchors->n << "\n";
 
   anchors->a = mg_lchain_dp(max_dis, max_dis, max_bw, max_skip_anchors, max_non_best_anchors, min_local_chain_cnt, min_local_chain_score, chn_pen_gap, chn_pen_skip, 0, 1, &anchors->n, anchors->a, &n_lchains, &lchains, km);
-
+  if (para->verbose) std::cerr << "after mg_lchain_dp anchor size:" << anchors->n << "\n";
+  if (para->verbose) std::cerr << "after mg_lchain_dp lchains number:" << n_lchains << "\n";
   // sort a by tpos
   radix_sort_mm128x(lchains, lchains + n_lchains);
   // get a complete chain
+  // if(para->verbose) {
+  //   std::cerr << (int)(lchains[0].y >> 32) << " " << (int)lchains[0].y << "\n";
+  // }
+  // find bug
   chain_dp(km, lchains, n_lchains, anchors, min_w, tlen, qlen, max_dis, max_dis, max_bw, chn_pen_gap, chn_pen_skip, 0, 1);
-  
+  if (para->verbose) std::cerr << "after chain_dp anchor size:" << anchors->n << "\n";
   kfree(km, lchains);
   return 0;
 }
 
 mm128_v minimizer_t::collect_anchors_bycons(const para_t* para, int qid, int qlen, const std::string& cons) {
   // collect cons 's minimizer
+  if (para->verbose) std::cerr << "collect cons's minimizer" << "\n";
   int n = seqs_size; // cons 's rid
   mm_v.n = mm_h[n];
-  if (para->m <= 5) mm_sketch(km, cons.c_str(), cons.size(), para->w, para->k, n, 0, &mm_v);
+  if (para->m <= 5) mm_sketch(km, cons.c_str(), cons.size(), para->mm_w, para->k, n, 0, &mm_v);
   mm_h[n + 1] = mm_v.n;
+
 
   sorted_mm_v.n = mm_h[n];
   for (int i = mm_h[n]; i < (int)mm_v.n; ++i) kv_push(mm128_t, km, sorted_mm_v, mm_v.a[i]);
   radix_sort_mm128x(sorted_mm_v.a + mm_h[n], sorted_mm_v.a + mm_h[n + 1]);
+
   // collect anchor between _seq and cons
+  // if (para->verbose) std::cerr << "collect anchor between cons and qseq" << "\n";
   mm128_v anchors = { 0, 0, 0 };
   collect_anchors(&anchors, n, qid, qlen);
+
+  if (para->verbose) std::cerr << "get a optimal chain through dp" << "\n";
   dp_chaining(para, &anchors, cons.size(), qlen);
+  // if (para->verbose) {
+  //   std::cerr << para->k << " " << anchors.n << "\n";
+  //   for (int i = 0; i < anchors.n; i++) {
+  //     std::cerr << i << ":" << (int)anchors.a[i].x << " " << (int)(int)anchors.a[i].y << " ";
+  //   }
+  //   std::cerr << "\n";
+  // }
   return anchors;
 }

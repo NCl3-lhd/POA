@@ -8,8 +8,9 @@ struct para_t {
   int match, mismatch, gap_open1, gap_open2, gap_ext1, gap_ext2; int inf_min;
   int b, f;// adband
   bool ab_band;
-  int k, w;// k-mer
+  int k, mm_w;// k-mer
   bool enable_seeding;
+  int poa_w;
   bool progressive_poa;
   int result; // result format 0 consensus,1 rc-msa 2 gfa
   int verbose;  //verbose level (0-2). 0: none, 1: information, 2: debug

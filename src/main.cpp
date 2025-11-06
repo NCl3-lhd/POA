@@ -31,8 +31,9 @@ int main(int argc, char** argv) {
     ("f,band_f", "band arg", cxxopts::value<int>()->default_value("40"))
     ("B,ab_band", "adpative band arg", cxxopts::value<bool>()->default_value("false"))
     ("S,seeding", "enable minimizer-based seeding and anchoring", cxxopts::value<bool>()->default_value("false"))
+    ("W,poa_w", "the minimum distance between adjacent anchors", cxxopts::value<int>()->default_value("500"))
     ("k,k_mer", "k_mer lenth", cxxopts::value<int>()->default_value("19")) //19
-    ("w,window", "k_mer_window lenth", cxxopts::value<int>()->default_value("10"))
+    ("w,mm_w", "k_mer_window lenth", cxxopts::value<int>()->default_value("10"))
     ("s,sample_num", "sample_num", cxxopts::value<int>()->default_value("50"))
     ("p,progressive_poa", "is progressive_poa", cxxopts::value<bool>()->default_value("false"))
     ("r,result", "result format (0-2). 0: consensus, 1: rc-msa, 2: gfa", cxxopts::value<int>()->default_value("0"))
@@ -64,7 +65,7 @@ int main(int argc, char** argv) {
     para->f = result["band_f"].as<int>();
     para->ab_band = result["ab_band"].as<bool>();
     para->k = result["k_mer"].as<int>();
-    para->w = result["window"].as<int>();
+    para->mm_w = result["mm_w"].as<int>();
     para->progressive_poa = result["progressive_poa"].as<bool>();
     para->enable_seeding = result["seeding"].as<bool>();
     thread = result["thread"].as<int>();
@@ -72,6 +73,7 @@ int main(int argc, char** argv) {
     if (sample_num < 0) sample_num * -1;
     para->result = result["result"].as<int>();
     para->verbose = result["verbose"].as<int>();
+    para->poa_w = result["poa_w"].as<int>();
   }
   catch (const cxxopts::exceptions::exception& e)
   {
@@ -102,7 +104,9 @@ int main(int argc, char** argv) {
   // std::sort(ord.begin(), ord.end(), [&](const int& i, const int& j) {
   //   return  seqs[i].seq.size() > seqs[j].seq.size();
   // });
+  if (para->verbose && para->enable_seeding) std::cerr << "collect minimizer" << "\n";
   minimizer_t* mm = new minimizer_t(para, seqs);
+  if (para->verbose && para->progressive_poa) std::cerr << "build guide tree" << "\n";
   if (para->inc_fp.empty() && para->progressive_poa) {
     std::cerr << "progressive" << "\n";
     mm->get_guide_tree(para);
@@ -118,7 +122,7 @@ int main(int argc, char** argv) {
   // for (int i = 0; i < seqs.size(); i++) {
   //   std::cout << i << " " << ord[i] << " " << seqs[ord[i]].seq.size() << "\n";
   // }
-  // std::cerr << "poa" << "\n";
+  if (para->verbose) std::cerr << "poa" << "\n";
   // seqs[0].seq = "TTGCCCTT";
   // seqs[1].seq = "CCAATTTT";
   // seqs[2].seq = "TGCT";
@@ -140,12 +144,14 @@ int main(int argc, char** argv) {
       // std::vector<res_t> res = POA(para, DAG, tseq);
       // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
       // std::vector<res_t> res = abPOA(para, DAG, mm, rid, tseq, &mpool);
-
+      if (para->verbose) std::cerr << "aligment" << "\n";
       std::vector<res_t> res = alignment(para, DAG, mm, rid, seqs[rid].seq, &mpool);
       // return 0;
       // std::cerr << "add_path" << "\n";
+      if (para->verbose) std::cerr << "add path" << "\n";
       DAG->add_path(para->m, i, res);
       // std::cerr << "topsort" << "\n";
+      if (para->verbose) std::cerr << "topsort" << "\n";
       DAG->topsort(para, i + 1 == seqs.size());
       // std::cout << i << " " << DAG->rank.size() << "\n";
     }

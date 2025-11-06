@@ -2008,16 +2008,19 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
     //   std::cerr << res[i].from << " " << char256_table[res[i].base] << "\n";
     // }
     return  poa(para, DAG, 0, 1, rid, tseq.c_str(), tseq.size(), mpool);
-    return res;
     // return abPOA(para, DAG, mm, rid, tseq, mpool);
   }
   // para->enable_seeding
   if (!DAG->is_topsorted) DAG->topsort(para, 0);
 
-
+  if (para->verbose) std::cerr << "collect_anchors_bycons" << "\n";
   mm128_v anchors = mm->collect_anchors_bycons(para, rid, _seq.size(), DAG->cons);
+  // no chain
+  if (anchors.n == 0) return poa(para, DAG, 0, 1, rid, tseq.c_str(), tseq.size(), mpool);
+
   int beg_id = 0, beg_qpos = 0, end_id = -1, end_tpos = -1, end_qpos = -1;
   int j = 0;
+  if (para->verbose) std::cerr << "subgraph poa" << "\n";
   for (int i = 0; i < anchors.n; i++) {
     uint64_t xi = anchors.a[i].x, yi = anchors.a[i].y;
     int q_span = yi >> 32 & 0xff;

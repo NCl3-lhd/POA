@@ -2,6 +2,7 @@
 #include "kalloc.h"
 #include "cstring"
 #include "kvec.h"
+#include <iostream>
 constexpr int INF = 1e9;
 static int64_t mg_chain_bk_end(int32_t max_drop, const mm128_t* z, const int32_t* f, const int64_t* p, int32_t* t, int64_t k)
 {
@@ -47,6 +48,8 @@ static inline int32_t comput_sc(const mm128_t* ai, const mm128_t* aj, int32_t ma
   }
   return sc;
 }
+
+// can be faster futher if this is be the bottleneck
 mm128_t* mg_chain_backtrack(void* km, int64_t n, const int32_t* f, const mm128_t* a, const int64_t* p, int32_t* v, int32_t* t, int32_t min_cnt, int32_t min_sc, int32_t max_drop, int32_t* n_u_, int32_t* n_v_)
 {
   mm128_t* z;
@@ -198,10 +201,14 @@ mm128_t* mg_lchain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int 
     f[i] = max_f, p[i] = max_j;
     if (max_ii < 0 || (a[i].x - a[max_ii].x <= (int64_t)max_dist_x && f[max_ii] < f[i]))
       max_ii = i;
-    //fprintf(stderr, "X1\t%ld\t%ld:%d\t%ld\t%ld:%d\t%ld\t%ld\n", (long)i, (long)(a[i].x>>32), (int32_t)a[i].x, (long)max_j, max_j<0?-1L:(long)(a[max_j].x>>32), max_j<0?-1:(int32_t)a[max_j].x, (long)max_f, (long)v[i]);
+    // fprintf(stderr, "X1\t%ld\t%ld:%d\t%ld\t%ld:%d\t%ld\t%ld\n", (long)i, (long)(a[i].x>>32), (int32_t)a[i].x, (long)max_j, max_j<0?-1L:(long)(a[max_j].x>>32), max_j<0?-1:(int32_t)a[max_j].x, (long)max_f, (long)v[i]);
   }
-
+  // std::cerr << max_ii << "\n";
   u = mg_chain_backtrack(km, n, f, a, p, v, t, min_cnt, min_sc, max_drop, &n_u, &n_v);
+  // for (int i = 0; i < n_v; i++) {
+  //   std::cerr <<  v[i] << " ";
+  // }
+  // std::cerr << "\n";
   // v restore the anchor 's index
   *n_u_ = n_u, * _u = u; // NB: note that u[] may not be sorted by score here
   kfree(km, p); kfree(km, f); kfree(km, t);
@@ -269,13 +276,15 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
       global_max_i = i;
     }
   }
-  if (global_max_i < 0) return 0;
+  if (global_max_i < 0) {
+    return 0;
+  }
   mm128_v anchors = { 0, 0, 0 };
   // collect anchors based on global_max_i
   int cur_i = global_max_i, pre_i = pre_chain[global_max_i];
   uint64_t cur_y = lchains[cur_i].y, pre_x, pre_y;
   int last_tpos = tlen, last_qpos = qlen;
-  int i;
+  int i = (uint32_t)cur_y - 1;
   while (pre_i != -1) { // collect valid anchors in local_chains[cur_i], constrained by local_chains[pre_i]
     pre_x = lchains[pre_i].x, pre_y = lchains[pre_i].y;
 
@@ -299,7 +308,7 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
   // collect anchors of last chain: local_chains[cur_i]
   while (i >= 0) {
     int cur_tpos = a[i].x, cur_qpos = (int32_t)a[i].y;
-    if (last_tpos - cur_tpos >= min_w && last_qpos - cur_qpos >= min_w) {
+    if (last_tpos - cur_tpos >= min_w && last_qpos - cur_qpos >= min_w) {  
       kv_push(mm128_t, 0, anchors, a[i]);
       last_tpos = cur_tpos, last_qpos = cur_qpos;
     }
@@ -312,7 +321,7 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
     anchors.a[i] = anchors.a[anchors.n - i - 1];
     anchors.a[anchors.n - i - 1] = tmp;
   }
-  
+
   // if (verbose >= ABPOA_LONG_DEBUG_VERBOSE) {
   //   for (i = _n; i < par_anchors->n; ++i) {
   //     uint64_t ia = par_anchors->a[i];
