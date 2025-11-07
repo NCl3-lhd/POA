@@ -26,12 +26,25 @@ static inline int32_t comput_sc(const mm128_t* ai, const mm128_t* aj, int32_t ma
 {
   int32_t dq = (int32_t)ai->y - (int32_t)aj->y, dr, dd, dg, q_span, sc;
   bool is_equal = false;
-  if (dq <= 0 || dq > max_dist_x) return -INF;
+  if (dq <= 0 || dq > max_dist_x) {
+    std::cerr << (int32_t)ai->y << " " << (int32_t)aj->y << "\n";
+    std::cerr << dq << "\n";
+    return -INF;
+  }
   dr = (int32_t)(ai->x - aj->x);
-  if (is_equal && (dr == 0 || dq > max_dist_y)) return -INF;
+  if (is_equal && (dr == 0 || dq > max_dist_y)) {
+    std::cerr << "2" << "\n";
+    return -INF;
+  }
   dd = dr > dq ? dr - dq : dq - dr;
-  if (is_equal && dd > bw) return -INF;
-  if (n_seg > 1 && !is_cdna && is_equal && dr > max_dist_y) return -INF;
+  if (is_equal && dd > bw) {
+    std::cerr << "3" << "\n";
+    return -INF;
+  }
+  if (n_seg > 1 && !is_cdna && is_equal && dr > max_dist_y) {
+    std::cerr << "4" << "\n";
+    return -INF;
+  }
   dg = dr < dq ? dr : dq;
   q_span = aj->y >> 32 & 0xff;
   sc = q_span < dg ? q_span : dg;
@@ -61,7 +74,7 @@ mm128_t* mg_chain_backtrack(void* km, int64_t n, const int32_t* f, const mm128_t
   memset(t, 0, n * sizeof(int32_t));
 
   for (i = n - 1, n_z = 0; i >= 0; i--) {
-    if (t[p[i]] == 0 && f[i] >= min_sc) {
+    if (t[p[i]] == 0 && f[i] >= 0 && f[i] >= min_sc) {
       ++n_z;
       t[i] = 2;
     }
@@ -80,8 +93,8 @@ mm128_t* mg_chain_backtrack(void* km, int64_t n, const int32_t* f, const mm128_t
     if (t[z[k].y] == 0) {
       int64_t n_v0 = n_v, end_i;
       int32_t sc;
-      end_i = mg_chain_bk_end(max_drop, z, f, p, t, k);
-      for (i = z[k].y; i != end_i; i = p[i])
+      // end_i = mg_chain_bk_end(max_drop, z, f, p, t, k);
+      for (i = z[k].y; i != -1; i = p[i])
         ++n_v, t[i] = 1;
       sc = i < 0 ? z[k].x : (int32_t)z[k].x - f[i];
       if (sc >= min_sc && n_v > n_v0 && n_v - n_v0 >= min_cnt)
@@ -96,8 +109,8 @@ mm128_t* mg_chain_backtrack(void* km, int64_t n, const int32_t* f, const mm128_t
     if (t[z[k].y] == 0) {
       int64_t n_v0 = n_v, end_i;
       int32_t sc;
-      end_i = mg_chain_bk_end(max_drop, z, f, p, t, k);
-      for (i = z[k].y; i != end_i; i = p[i])
+      // end_i = mg_chain_bk_end(max_drop, z, f, p, t, k);
+      for (i = z[k].y; i != -1; i = p[i])
         v[n_v++] = i, t[i] = 1;
       sc = i < 0 ? z[k].x : (int32_t)z[k].x - f[i];
       if (sc >= min_sc && n_v > n_v0 && n_v - n_v0 >= min_cnt) {
@@ -105,6 +118,12 @@ mm128_t* mg_chain_backtrack(void* km, int64_t n, const int32_t* f, const mm128_t
         uint64_t strand = a[end_id].x >> 63, tpos = (uint32_t)a[end_id].x, qpos = (uint32_t)a[end_id].y;
         u[n_u].x = strand << 63 | tpos << 32 | qpos;
         u[n_u++].y = (uint64_t)n_v0 << 32 | n_v;
+        // std::cerr << tpos << " " << qpos << " " << n_v0 << " " << n_v << "\n";
+        // for (int i = n_v0; i < n_v; i++) {
+        //   int tmp = a[v[i]].x;
+        //   std::cerr << tmp << " ";
+        // }
+        // std::cerr << "\n";
       }
       else n_v = n_v0;
     }
@@ -124,11 +143,14 @@ static mm128_t* compact_a(void* km, int32_t n_u, mm128_t* u, int32_t n_v, int32_
   for (i = 0, k = 0; i < n_u; ++i) {
     int32_t k0 = k;
     int32_t st = u[i].y >> 32, end = (int32_t)u[i].y;
-    for (j = st; j < end; ++j)
+    // std::cerr << "tpos:" <<( u[i].x >> 32 )<< "\n";
+    for (j = end - 1; j >= st; j--) {
       b[k++] = a[v[j]];
+      // std::cerr << (int)a[v[j]].x << " ";
+    }
+    // std::cerr << "\n";
   }
   kfree(km, v);
-  memcpy(b, a, k * sizeof(mm128_t)); // write _a_ to _b_ and deallocate _a_ because _a_ is oversized, sometimes a lot
   kfree(km, a);
   return b;
 }
@@ -150,6 +172,7 @@ mm128_t* mg_lchain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int 
   if (_u) *_u = 0, * n_u_ = 0;
   if (n == 0 || a == 0) {
     kfree(km, a);
+    *_n = 0;
     return 0;
   }
   if (max_dist_x < bw) max_dist_x = bw;
@@ -165,11 +188,11 @@ mm128_t* mg_lchain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int 
     int64_t max_j = -1, end_j;
     int32_t max_f = a[i].y >> 32 & 0xff, n_skip = 0, n_iter = 0;
     while (st < i && (a[i].x >> 32 != a[st].x >> 32 || a[i].x > a[st].x + max_dist_x)) ++st;
-    if (i - st > max_iter) st = i - 5000;
+    if (i - st > 5000) st = i - 5000;
     for (j = i - 1; j >= st; --j) {
       int32_t sc;
       sc = comput_sc(&a[i], &a[j], max_dist_x, max_dist_y, bw, chn_pen_gap, chn_pen_skip, is_cdna, n_seg);
-      if (sc == INT32_MIN) continue;
+      if (sc == -INF) continue;
       sc += f[j];
       if (sc > max_f) {
         max_f = sc, max_j = j;
@@ -186,34 +209,36 @@ mm128_t* mg_lchain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int 
       if (p[j] >= 0) t[p[j]] = i;
     }
     end_j = j;
-    if (max_ii < 0 || a[i].x - a[max_ii].x >(int64_t)max_dist_x) {
-      int32_t max = INT32_MIN;
-      max_ii = -1;
-      for (j = i - 1; j >= st; --j)
-        if (max < f[j]) max = f[j], max_ii = j;
-    }
-    if (max_ii >= 0 && max_ii < end_j) {
-      int32_t tmp;
-      tmp = comput_sc(&a[i], &a[max_ii], max_dist_x, max_dist_y, bw, chn_pen_gap, chn_pen_skip, is_cdna, n_seg);
-      if (tmp != INT32_MIN && max_f < tmp + f[max_ii])
-        max_f = tmp + f[max_ii], max_j = max_ii;
-    }
+    // if (max_ii < 0 || a[i].x - a[max_ii].x >(int64_t)max_dist_x) {
+    //   int32_t max = -INF;
+    //   max_ii = -1;
+    //   for (j = i - 1; j >= st; --j)
+    //     if (max < f[j]) max = f[j], max_ii = j;
+    // }
+    // if (max_ii >= 0 && max_ii < end_j) {
+    //   int32_t tmp;
+    //   tmp = comput_sc(&a[i], &a[max_ii], max_dist_x, max_dist_y, bw, chn_pen_gap, chn_pen_skip, is_cdna, n_seg);
+    //   if (tmp != -INF && max_f < tmp + f[max_ii])
+    //     max_f = tmp + f[max_ii], max_j = max_ii;
+    // }
     f[i] = max_f, p[i] = max_j;
+    // if (i == 29) {
+    //   std::cerr << "ddl:" << "\n";
+    //   std::cerr << (int)a[i].y << " " << (a[i].y >> 32 & 0xff) << "\n";
+    //   std::cerr << f[i] << " " << p[i] << "\n";
+    // }
     if (max_ii < 0 || (a[i].x - a[max_ii].x <= (int64_t)max_dist_x && f[max_ii] < f[i]))
       max_ii = i;
     // fprintf(stderr, "X1\t%ld\t%ld:%d\t%ld\t%ld:%d\t%ld\t%ld\n", (long)i, (long)(a[i].x>>32), (int32_t)a[i].x, (long)max_j, max_j<0?-1L:(long)(a[max_j].x>>32), max_j<0?-1:(int32_t)a[max_j].x, (long)max_f, (long)v[i]);
   }
-  // std::cerr << max_ii << "\n";
+  // std::cerr << "mg_lchain_dp score:" << f[max_ii] << "\n";
   u = mg_chain_backtrack(km, n, f, a, p, v, t, min_cnt, min_sc, max_drop, &n_u, &n_v);
-  // for (int i = 0; i < n_v; i++) {
-  //   std::cerr <<  v[i] << " ";
-  // }
-  // std::cerr << "\n";
   // v restore the anchor 's index
   *n_u_ = n_u, * _u = u; // NB: note that u[] may not be sorted by score here
   kfree(km, p); kfree(km, f); kfree(km, t);
   if (n_u == 0) {
     kfree(km, a); kfree(km, v);
+    *_n = 0;
     return 0;
   }
   *_n = n_v;
@@ -240,6 +265,7 @@ int get_local_chain_score(int end_tpos_j, int end_qpos_j, int start_anchor_i, in
 //   y: start_anchor_i | end_anchor_i   [start_anchor_i, end_anchor_i)
 int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int min_w, int tlen, int qlen, int max_dist_x, int max_dist_y, int bw, float chn_pen_gap, float chn_pen_skip, int is_cdna, int n_seg) {
   size_t n = _anchors->n;
+
   mm128_t* a = _anchors->a;
   int32_t* f = Kmalloc(km, int32_t, n);
   int* chain_score = Kmalloc(km, int, n_lchains), * pre_chain = Kmalloc(km, int, n_lchains);
@@ -253,8 +279,10 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
       int32_t sc;
       sc = comput_sc(&a[j], &a[j - 1], max_dist_x, max_dist_y, bw, chn_pen_gap, chn_pen_skip, is_cdna, n_seg);
       f[j] = f[j - 1] + sc;
+      if (n == 111) std::cerr << j << " " << f[j] << "\n";
     }
     int max_j = -1, max_score = f[end_anchor_i - 1];
+    if (n == 111) std::cerr << f[start_anchor_i] << " " << f[end_anchor_i - 1] << "\n";
     while (st < i) {
       if ((int)((lchains[st].x) >> 63) != strand) ++st;
       else break;
@@ -271,13 +299,20 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
       }
     }
     chain_score[i] = max_score; pre_chain[i] = max_j;
+
     if (max_score > global_max_score) {
       global_max_score = max_score;
       global_max_i = i;
     }
   }
+  if (n == 111) {
+    std::cerr << global_max_i << "\n";
+  }
   if (global_max_i < 0) {
     return 0;
+  }
+  if (n == 111) {
+    std::cerr << "lhd" << "\n";
   }
   mm128_v anchors = { 0, 0, 0 };
   // collect anchors based on global_max_i
@@ -295,7 +330,7 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
       int cur_tpos = a[i].x, cur_qpos = (int32_t)a[i].y;
       if (cur_tpos > pre_end_tpos && cur_qpos > pre_end_qpos) {
         if (last_tpos - cur_tpos >= min_w && last_qpos - cur_qpos >= min_w) {
-          kv_push(mm128_t, 0, anchors, a[i]);
+          kv_push(mm128_t, km, anchors, a[i]);
           last_tpos = cur_tpos, last_qpos = cur_qpos;
         }
       }
@@ -306,10 +341,14 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
     cur_i = pre_i, pre_i = pre_chain[pre_i], cur_y = pre_y;
   }
   // collect anchors of last chain: local_chains[cur_i]
+  if (n == 111) {
+    std::cerr << i << "\n";
+  }
   while (i >= 0) {
     int cur_tpos = a[i].x, cur_qpos = (int32_t)a[i].y;
-    if (last_tpos - cur_tpos >= min_w && last_qpos - cur_qpos >= min_w) {  
-      kv_push(mm128_t, 0, anchors, a[i]);
+    if (last_tpos - cur_tpos >= min_w && last_qpos - cur_qpos >= min_w) {
+
+      kv_push(mm128_t, km, anchors, a[i]);
       last_tpos = cur_tpos, last_qpos = cur_qpos;
     }
     if (i == (cur_y >> 32)) break;

@@ -417,7 +417,7 @@ int minimizer_t::collect_anchors(mm128_v* anchors, int tid, int qid, int qlen) {
           uint64_t _yj = sorted_mm_v.a[_j].y;
           // t_strand<<63 | t_lastPos<<32 | q_lastPos
           mm128_t anchor;
-          uint32_t qspan = _xj && 0xff;
+          uint32_t qspan = _xj & 0xff;
           if ((_yi & 1) == (_yj & 1)) { // same strand
             // p->x = (r & 0xffffffff00000000ULL) | rpos;
             // p->y = (uint64_t)q->q_span << 32 | q->q_pos >> 1;
@@ -505,10 +505,26 @@ int minimizer_t::dp_chaining(const para_t* para, mm128_v* anchors, int tlen, int
   // sort a by tpos
   radix_sort_mm128x(lchains, lchains + n_lchains);
   // get a complete chain
-  // if(para->verbose) {
-  //   std::cerr << (int)(lchains[0].y >> 32) << " " << (int)lchains[0].y << "\n";
+  // if (para->verbose) {
+  //   // std::cerr << (int)(lchains[0].y >> 32) << " " << (int)lchains[0].y << "\n";
+  //   for (int i = 0; i < n_lchains; i++) {
+  //     uint64_t xi = lchains[i].x, yi = lchains[i].y;
+  //     std::cerr << "tpos:" << (xi >> 32) << " " << (int)xi << "\n";
+  //     int st = (yi >> 32), ed = (int)yi;
+  //     std::cerr << "i [st, ed):"<< i << " " << st << " " << ed << "\n";
+  //     for (int i = st; i < ed; i++) {
+  //       std::cerr << (int)anchors->a[i].x << " ";
+  //     }
+  //     std::cerr << "\n";
+  //     for (int i = st; i < ed; i++) {
+  //       std::cerr << (int)anchors->a[i].y << " ";
+  //     }
+  //     std::cerr << "\n";
+  //   }
+
   // }
   // find bug
+
   chain_dp(km, lchains, n_lchains, anchors, min_w, tlen, qlen, max_dis, max_dis, max_bw, chn_pen_gap, chn_pen_skip, 0, 1);
   if (para->verbose) std::cerr << "after chain_dp anchor size:" << anchors->n << "\n";
   kfree(km, lchains);
@@ -528,6 +544,11 @@ mm128_v minimizer_t::collect_anchors_bycons(const para_t* para, int qid, int qle
   for (int i = mm_h[n]; i < (int)mm_v.n; ++i) kv_push(mm128_t, km, sorted_mm_v, mm_v.a[i]);
   radix_sort_mm128x(sorted_mm_v.a + mm_h[n], sorted_mm_v.a + mm_h[n + 1]);
 
+  // std::cerr << "mm span\n" << mm_h[qid] << "\n";
+  // for (int i = mm_h[qid]; i < mm_h[qid + 1]; i++) {
+  //   std::cerr << (sorted_mm_v.a[i].x & 0xff) << " ";
+  // }
+  // std::cerr << "\n";
   // collect anchor between _seq and cons
   // if (para->verbose) std::cerr << "collect anchor between cons and qseq" << "\n";
   mm128_v anchors = { 0, 0, 0 };

@@ -23,6 +23,7 @@ void graph::topsort(const para_t* para, int op) { // if op == 1, is not normal t
   std::vector<int> deg(node.size());
   if (op == 1) {
     for (int i = 0; i < node.size(); i++) {
+      node[i].rank = -1;
       if (node[i].par_id != node[i].id) continue;// is not parent
       int sum_deg = 0;
       for (int j = 0; j < node[i].aligned_node.size(); j++) {
@@ -43,7 +44,8 @@ void graph::topsort(const para_t* para, int op) { // if op == 1, is not normal t
       rank.emplace_back(u);
       for (int i = 0; i < cur.aligned_node.size(); i++) {
         if (cur.aligned_node[i] < 0) continue;
-        const node_t& son = node[cur.aligned_node[i]];
+        node_t& son = node[cur.aligned_node[i]];
+        son.rank = cur.rank;
         for (int j = 0; j < son.out.size(); j++) {
           int v = node[son.out[j]].par_id;
           if (--deg[v] == 0) {
@@ -239,20 +241,54 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
 }
 
 void graph::output_rc_msa(para_t* para, const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs) {
-  // std::cerr << seqs.size() << " " << rank.size() << "\n";
+  std::cerr << node.size() << " " << rank.size() << "\n";
   if (is_topsorted == false) topsort(para, 1);
   std::vector<std::string> res(seqs.size(), std::string(rank.size() - 2, '-'));
-  for (int i = 0; i < node.size(); i++) {
-    int rank = node[node[i].par_id].rank;
+  for (int i = 2; i < node.size(); i++) {
+    if (node[i].rank >= rank.size()) {
+      std::cerr << i << " " << node[i].rank << " " << rank.size() << "\n";
+      std::cerr << "node_id: " << i << "\n";
+      std::cerr << "base: " << char256_table[node[i].base] << "\n";
+      std::cerr << "par_id: " << node[i].par_id << "\n";
+      std::cerr << "rank: " << node[i].rank << "\n";
+      std::cerr << "deg of in: " << node[i].in.size() << "\n";
+      for (int j = 0; j < node[i].in.size(); j++) {
+        // std::cerr << node[i].in[j] << "\n";
+        std::cerr << node[node[i].in[j]].rank << " ";
+      }
+      std::cerr << "\n";
+      std::cerr << "deg of out: " << node[i].out.size() << "\n";
+      std::cerr << "num from seq: " << node[i].ids.size()<< "\n";
+      break;
+    }
+    // if (node[i].par_id >= node.size()) {
+    //   std::cerr << 0 << " ";
+    // }
+    // int rk = node[node[i].par_id].rank;
+    // if (rk >= rank.size()) std::cerr << rk << "\n";
+    // std::cerr << node[i].ids.size() << " " << rank.size() << "\n";
     for (int id : node[i].ids) {
-      if (rank) res[id][rank - 1] = char256_table[node[i].base];
+      // if(id >= res.size()) {
+      //   std::cerr << 1 << " ";
+      // }
+      // if(rk - 1 >= res[id].size()) {
+      //   std::cerr << 2 << " ";
+      //   std::cerr << rk - 1 << " " << res[id].size() << "\n";
+      //   break;
+      // }
+      // if (rank) res[id][rk - 1] = char256_table[node[i].base];
     }
   }
-  for (int i = 0; i < seqs.size(); i++) {
-    // std::cerr << rid_to_ord[i] << "\n";
-    std::cout << ">" << seqs[i].name << " " << seqs[i].comment << "\n";
-    std::cout << res[rid_to_ord[i]] << "\n";
-  }
+  // std::cerr << "2:" << "\n";
+  // for (int i = 0; i < seqs.size(); i++) {
+  //   // std::cerr << rid_to_ord[i] << "\n";
+  //   std::cerr << "3:" << "\n";
+  //   // std::cout << ">" << seqs[i].name << "\n";
+  //   std::cout << ">" << i  + 1 << "\n";
+  //   // std::cout << ">" << seqs[i].name << " " << seqs[i].comment << "\n";
+  //   std::cerr << "4:" << "\n";
+  //   // std::cout << res[rid_to_ord[i]] << "\n";
+  // }
 }
 
 std::vector<int> graph::calculateR() const {

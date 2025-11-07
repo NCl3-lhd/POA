@@ -1383,7 +1383,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   int col_size = (m + 1 + reg_size - 1) / reg_size * reg_size;
   seq.append(col_size - m, char26_table['N']);
   // std::cerr << seq.size() << " " << col_size << "\n";
-  assert(col_size % reg_size == 0);
+  // assert(col_size % reg_size == 0);
   std::vector<int> Ms(n, m + 1), Me(n); // index is rank  [Ms[i], Me[i]]
   std::vector<int> Bs(n), Be(n);  // index is rank    [Bs[i], Be[i] - 1)  Be[i] - 1 's block is Neg_inf is designed for M direciton dp
   std::vector<int> Mp(n), Sl(n), Pl(n, m), Pr(n), Ol(n), Or(n), Ow(n);  // index is rank
@@ -1396,7 +1396,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     // Ms[i] = 0, Me[i] = m;
     int aci = beg_i + i;
     if (para->f > 0 && !para->ab_band) {
-      Ms[i] = std::max(0, std::min(DAG->hlen[aci] - DAG->hlen[beg_i], m + DAG->tlen[aci] - DAG->tlen[end_i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[aci] - DAG->hlen[beg_i], m + DAG->tlen[aci] - DAG->tlen[end_i]) + w);
+      Ms[i] = std::max(0, std::min(DAG->hlen[aci] - DAG->hlen[beg_i], m - DAG->tlen[aci] + DAG->tlen[end_i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[aci] - DAG->hlen[beg_i], m - DAG->tlen[aci] + DAG->tlen[end_i]) + w);
     }
     else {
       Ms[i] = 0, Me[i] = m;
@@ -1443,7 +1443,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   // std::cerr << w << "\n";
   if (para->f > 0 && para->ab_band) {
     // Ms[i] = std::max(0, std::min(DAG->hlen[aci] - DAG->hlen[beg_i], m + DAG->tlen[aci] - DAG->tlen[end_i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[aci] - DAG->hlen[beg_i], m + DAG->tlen[aci] - DAG->tlen[end_i]) + w);
-    Ms[0] = std::max(0, std::min({ Pl[0], DAG->hlen[beg_i] - DAG->hlen[beg_i] + Ol[0], m + DAG->tlen[beg_i] - DAG->tlen[end_i] }) - w), Me[0] = std::min(m, std::max({ Pr[0], DAG->hlen[beg_i] - DAG->hlen[beg_i] + Or[0], m + DAG->tlen[beg_i] - DAG->tlen[end_i] }) + w);
+    Ms[0] = std::max(0, std::min({ Pl[0], DAG->hlen[beg_i] - DAG->hlen[beg_i] + Ol[0], m - DAG->tlen[beg_i] + DAG->tlen[end_i] }) - w), Me[0] = std::min(m, std::max({ Pr[0], DAG->hlen[beg_i] - DAG->hlen[beg_i] + Or[0], m - DAG->tlen[beg_i] + DAG->tlen[end_i] }) + w);
     Bs[0] = Ms[0] / reg_size, Be[0] = Me[0] / reg_size + 2; // [block_s,block_e)
   }
   for (int bid = Bs[0]; bid < Be[0]; bid++) {
@@ -1489,7 +1489,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       // int tw = para->b + (m - (DAG->hlen[i] + Ol[i])) / para->f;
 
       // Ms[i] = std::max(0, std::min({ Pl[i], DAG->hlen[i] + Ol[i], m - DAG->tlen[i] }) - w - Ow[i]), Me[i] = std::min(m, std::max({ Pr[i], DAG->hlen[i] + Or[i], m - DAG->tlen[i] }) + w + Ow[i]);
-      Ms[i] = std::max(0, std::min({ Pl[i], DAG->hlen[aci] - DAG->hlen[beg_i] + Ol[i], m + DAG->tlen[aci] - DAG->tlen[end_i] }) - w - Ow[i]), Me[i] = std::min(m, std::max({ Pr[i], DAG->hlen[aci] - DAG->hlen[beg_i] + Or[i], m + DAG->tlen[aci] - DAG->tlen[end_i] }) + w + Ow[i]);
+      Ms[i] = std::max(0, std::min({ Pl[i], DAG->hlen[aci] - DAG->hlen[beg_i] + Ol[i], m - DAG->tlen[aci] + DAG->tlen[end_i] }) - w - Ow[i]), Me[i] = std::min(m, std::max({ Pr[i], DAG->hlen[aci] - DAG->hlen[beg_i] + Or[i], m - DAG->tlen[aci] + DAG->tlen[end_i] }) + w + Ow[i]);
 
       // int tbs = Ms[i] / reg_size, tbe = Me[i] / reg_size + 2;
       // // assert(tbe - tbs <= Be[i] - Bs[i]);
@@ -1503,16 +1503,16 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     // std::cerr << Bs[i] << " " << Be[i] << "\n";
     int block_num = Be[i] - Bs[i] - 1; // not contain Be[i] - 1 's block
     sum += Me[i] - Ms[i] + 1;
-    auto start2 = std::chrono::high_resolution_clock::now();
+    // auto start2 = std::chrono::high_resolution_clock::now();
     int pre_num = 0;
     for (int k = 0; k < cur.in.size(); k++) {
       const node_t& pre = node[cur.in[k]];
       int p = pre.rank - beg_i; // rank
-      if (i == 1) {
-        // std::cerr << beg_i << " " << char256_table[node[rank[beg_i]].base] << "\n";
-        // std::cerr << pre.rank << " " << char256_table[pre.base] << "\n";
-        // std::cerr << cur.rank << " " << char256_table[cur.base] << "\n";
-      }
+      // if (i == 1) {
+      //   // std::cerr << beg_i << " " << char256_table[node[rank[beg_i]].base] << "\n";
+      //   // std::cerr << pre.rank << " " << char256_table[pre.base] << "\n";
+      //   // std::cerr << cur.rank << " " << char256_table[cur.base] << "\n";
+      // }
       if (p < 0) continue;
       reg PRE_BASE = _mm256_set1_epi32(p == 0 ? char256_table['N'] : pre.base);
       int prev = NEG_INF;
@@ -1564,9 +1564,19 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     }
     // Be[i] - 1
     // if (block_s - 1 >= 0) _mm256_store_si256((reg*)(M_i + (block_s - 1) * reg_size), Neg_inf);
+    if (pre_num == 0) {
+      for (int bid = 0; bid < block_num; bid++) {
+        _mm256_store_si256((reg*)(M_i + bid * reg_size), Neg_inf);
+        _mm256_store_si256((reg*)(D_i + bid * reg_size), Neg_inf);
+      }
+    }
     _mm256_store_si256((reg*)(M_i + block_num * reg_size), Neg_inf);
     _mm256_store_si256((reg*)(D_i + block_num * reg_size), Neg_inf);
-
+    // if(i == 1) {
+    //   std::cerr << "debug:\n";
+    //   std::cerr << i << "\n";
+    //   std::cerr << pre_num << "\n";
+    // }
     // if (i % 100 == 0) std::cout << i << "\n";
     // auto end2 = std::chrono::high_resolution_clock::now();
     // total_part2 += std::chrono::duration_cast<std::chrono::microseconds>(end2 - start2);
@@ -1713,6 +1723,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   // std::cerr << i << " " << j << " " << M[i][calj(acj, Bs[i])] << "\n";
   // std::cerr << "finsh align" << "\n";
   // std::cerr << "finish" << "\n";
+  if (para->verbose) std::cerr << "score:" << M[i][j] << "\n";
   while (i > 0 || acj > 0) {
     // dsource
     j = calj(acj, Bs[i]);
@@ -1722,6 +1733,9 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       std::cerr << acj << "\n";
       exit(0);
     }
+    // std::cerr << M[0][0] << " " << M[1][1] << "\n";
+    // std::cerr << Bs[1] << " "  << Be[1] << "\n";
+    // std::cerr << M[i][j] << " "  << D[i][j] << " " << I[i][j] << "\n";
     // std::cerr << op << " " << i << " " << j << "\n";
     // if (j < 0 || j >(Be[i] - 1) * reg_size) {
     //   std::cerr << ans << "\n";
@@ -1823,7 +1837,6 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       // std::cerr << bk << "\n";
       // assert(bk != -1);
       if (bk != -1 && cur.in_weight[bk] >= cur.ind / 10) {  // backtrack based on the normal sample
-        // std::cerr << "M";
         op = ALL_OP;
         const node_t& pre = node[cur.in[bk]];
         int p = pre.rank - beg_i; // rank
@@ -2028,12 +2041,20 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
     end_id = DAG->cons_pos_to_id[end_tpos];
     int qlen = end_qpos - beg_qpos;
     std::vector<res_t> t_res = poa(para, DAG, beg_id, end_id, rid, tseq.c_str() + j, qlen, mpool);
+    // if(t_res[0].from != beg_id || t_res[0].base != DAG->node[t_res[0].from].base) 
+    // {
+    //   // std::cerr << t_res[0].
+    //   std::cerr << "bug!" << "\n";
+    //   exit(1);
+    // }
     res.insert(res.end(), t_res.begin(), t_res.end());
     j += qlen;
     for (int k = 0; k < q_span; k++, j++) {
       end_id = DAG->cons_pos_to_id[end_tpos + k];
-      const node_t& cur = DAG->node[end_id];
-      res.emplace_back(res_t(cur.id, cur.base));
+      if (k != q_span - 1) {
+        const node_t& cur = DAG->node[end_id];
+        res.emplace_back(res_t(cur.id, cur.base));
+      }
     }
     beg_id = end_id;beg_qpos = j;
   }

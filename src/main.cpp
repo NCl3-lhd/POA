@@ -158,6 +158,7 @@ int main(int argc, char** argv) {
     // handle output 
     // DAG->output_rc_msa(mm->rid_to_ord, seqs);
     // std::cerr << minl << " " << maxl << '\n';
+    // delete mpool; 
   }
   else {
     ThreadPool pool(thread);
@@ -235,11 +236,11 @@ int main(int argc, char** argv) {
     delete[] mpool;
     // std::cerr << "finish" << "\n";
   }
-  // std::cerr << "out_put" << "\n";
+  if(para->verbose) std::cerr << "out_put" << "\n";
   if (para->result == 0) DAG->output_consensus();
   else if (para->result == 1) DAG->output_rc_msa(para, mm->rid_to_ord, seqs);
   else if (para->result == 2) DAG->output_gfa(mm->rid_to_ord, seqs);
-
+  std::cerr << "3:" << "\n";
 
   // std::cout << "correct check" << "\n";
   // std::string s1 = "TTGCCCTT";
