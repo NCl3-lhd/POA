@@ -1822,13 +1822,13 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         const node_t& pre = node[cur.in[k]];
         int p = pre.rank - beg_i; // rank
         if (p < 0) continue;
-        if (pre.base != seq[acj - 1]) continue;
+        int pre_base = p == 0 ? char256_table['N'] : pre.base;
+        if (pre_base != seq[acj - 1]) continue;
         // M
         int pj = calj(acj, Bs[p]);
         // if (ans == 5114 && pj - 1 >= 0) 
           // std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
         int block_num = Be[p] - Bs[p] - 1; // not contain Be[i] - 1 's block
-        int pre_base = p == 0 ? char256_table['N'] : pre.base;
         if (pj - 1 >= 0 && pj - 1 < block_num * reg_size && M[i][j] == M[p][pj - 1] + (pre_base == seq[acj - 1] ? match : mismatch) && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
           bk = k;
           // break;
@@ -1837,7 +1837,6 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       // std::cerr << bk << "\n";
       // assert(bk != -1);
       if (bk != -1 && cur.in_weight[bk] >= cur.ind / 10) {  // backtrack based on the normal sample
-        op = ALL_OP;
         const node_t& pre = node[cur.in[bk]];
         int p = pre.rank - beg_i; // rank
         int pre_base = p == 0 ? char256_table['N'] : pre.base;
@@ -1853,6 +1852,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
           }
           else res.emplace_back(res_t(-1, seq[acj - 1], pre.par_id));
         }
+        op = ALL_OP;
         i = p, acj--;
         continue;
       }
@@ -1929,13 +1929,13 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         const node_t& pre = node[cur.in[k]];
         int p = pre.rank - beg_i; // rank
         if (p < 0) continue;
+        int pre_base = p == 0 ? char256_table['N'] : pre.base;
         // if (pre.base != seq[acj - 1]) continue;
         // M
         int pj = calj(acj, Bs[p]);
         // if (M[i][j] == 17586 && pj - 1 >= 0)
         //   std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
         int block_num = Be[p] - Bs[p] - 1; // not contain Be[i] - 1 's block
-        int pre_base = p == 0 ? char256_table['N'] : pre.base;
         if (pj - 1 >= 0 && pj - 1 < block_num * reg_size && M[i][j] == M[p][pj - 1] + (pre_base == seq[acj - 1] ? match : mismatch) && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
           bk = k;
           // break;
@@ -2029,7 +2029,9 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
   if (para->verbose) std::cerr << "collect_anchors_bycons" << "\n";
   mm128_v anchors = mm->collect_anchors_bycons(para, rid, _seq.size(), DAG->cons);
   // no chain
-  if (anchors.n == 0) return poa(para, DAG, 0, 1, rid, tseq.c_str(), tseq.size(), mpool);
+  if (anchors.n == 0) {
+    return poa(para, DAG, 0, 1, rid, tseq.c_str(), tseq.size(), mpool);
+  }
 
   int beg_id = 0, beg_qpos = 0, end_id = -1, end_tpos = -1, end_qpos = -1;
   int j = 0;
@@ -2041,12 +2043,6 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
     end_id = DAG->cons_pos_to_id[end_tpos];
     int qlen = end_qpos - beg_qpos;
     std::vector<res_t> t_res = poa(para, DAG, beg_id, end_id, rid, tseq.c_str() + j, qlen, mpool);
-    // if(t_res[0].from != beg_id || t_res[0].base != DAG->node[t_res[0].from].base) 
-    // {
-    //   // std::cerr << t_res[0].
-    //   std::cerr << "bug!" << "\n";
-    //   exit(1);
-    // }
     res.insert(res.end(), t_res.begin(), t_res.end());
     j += qlen;
     for (int k = 0; k < q_span; k++, j++) {
@@ -2061,6 +2057,27 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
   int qlen = tseq.size() - beg_qpos;
   std::vector<res_t> t_res = poa(para, DAG, beg_id, 1, rid, tseq.c_str() + j, qlen, mpool);
   res.insert(res.end(), t_res.begin(), t_res.end());
+  t_res = poa(para, DAG, 0, 1, rid, tseq.c_str(), tseq.size(), mpool);
+  // bool ok = 1;
+  // for (int i = 0; i < res.size(); i++) {
+  //   if (res[i].from != t_res[i].from || res[i].base != t_res[i].base || res[i].aligned_id != t_res[i].aligned_id) {
+  //     std::cerr << "i:" << i << " " << res.size() << "\n";
+  //     std::cerr << "from:" << res[i].from << " " << t_res[i].from << "\n";
+  //     std::cerr << "base:" << (int)res[i].base << " " << (int)t_res[i].base << "\n";
+  //     std::cerr << "aligned_id:" << res[i].aligned_id << " " << t_res[i].aligned_id << "\n";
+  //     ok = false;
+  //   }
+  //   // if (res[i].base != t_res[i].base) {
+  //   //   std::cerr << "base:" << (int)res[i].base << " " << (int)t_res[i].base << "\n";
+  //   //   exit(1);
+  //   // }
+  //   // if (res[i].aligned_id != t_res[i].aligned_id) {
+  //   //   std::cerr << "aligned_id:" << res[i].aligned_id << " " << t_res[i].aligned_id << "\n";
+  //   //   exit(1);
+  //   // }
+  // }
+  // // if (!ok) exit(1);
+  // // for (int i = 0)
   // free anchors
   kfree(mm->km, anchors.a);
   return res;

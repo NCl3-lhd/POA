@@ -27,22 +27,17 @@ static inline int32_t comput_sc(const mm128_t* ai, const mm128_t* aj, int32_t ma
   int32_t dq = (int32_t)ai->y - (int32_t)aj->y, dr, dd, dg, q_span, sc;
   bool is_equal = false;
   if (dq <= 0 || dq > max_dist_x) {
-    std::cerr << (int32_t)ai->y << " " << (int32_t)aj->y << "\n";
-    std::cerr << dq << "\n";
     return -INF;
   }
   dr = (int32_t)(ai->x - aj->x);
   if (is_equal && (dr == 0 || dq > max_dist_y)) {
-    std::cerr << "2" << "\n";
     return -INF;
   }
   dd = dr > dq ? dr - dq : dq - dr;
   if (is_equal && dd > bw) {
-    std::cerr << "3" << "\n";
     return -INF;
   }
   if (n_seg > 1 && !is_cdna && is_equal && dr > max_dist_y) {
-    std::cerr << "4" << "\n";
     return -INF;
   }
   dg = dr < dq ? dr : dq;
@@ -279,10 +274,8 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
       int32_t sc;
       sc = comput_sc(&a[j], &a[j - 1], max_dist_x, max_dist_y, bw, chn_pen_gap, chn_pen_skip, is_cdna, n_seg);
       f[j] = f[j - 1] + sc;
-      if (n == 111) std::cerr << j << " " << f[j] << "\n";
     }
     int max_j = -1, max_score = f[end_anchor_i - 1];
-    if (n == 111) std::cerr << f[start_anchor_i] << " " << f[end_anchor_i - 1] << "\n";
     while (st < i) {
       if ((int)((lchains[st].x) >> 63) != strand) ++st;
       else break;
@@ -305,14 +298,8 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
       global_max_i = i;
     }
   }
-  if (n == 111) {
-    std::cerr << global_max_i << "\n";
-  }
   if (global_max_i < 0) {
     return 0;
-  }
-  if (n == 111) {
-    std::cerr << "lhd" << "\n";
   }
   mm128_v anchors = { 0, 0, 0 };
   // collect anchors based on global_max_i
@@ -341,9 +328,6 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
     cur_i = pre_i, pre_i = pre_chain[pre_i], cur_y = pre_y;
   }
   // collect anchors of last chain: local_chains[cur_i]
-  if (n == 111) {
-    std::cerr << i << "\n";
-  }
   while (i >= 0) {
     int cur_tpos = a[i].x, cur_qpos = (int32_t)a[i].y;
     if (last_tpos - cur_tpos >= min_w && last_qpos - cur_qpos >= min_w) {

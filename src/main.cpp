@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
   minimizer_t* mm = new minimizer_t(para, seqs);
   if (para->verbose && para->progressive_poa) std::cerr << "build guide tree" << "\n";
   if (para->inc_fp.empty() && para->progressive_poa) {
-    std::cerr << "progressive" << "\n";
+    if (para->verbose) std::cerr << "progressive" << "\n";
     mm->get_guide_tree(para);
     // std::reverse(ord.begin(), ord.end());
     // for (int i = 0; i < seqs.size(); i++) {
@@ -240,7 +240,6 @@ int main(int argc, char** argv) {
   if (para->result == 0) DAG->output_consensus();
   else if (para->result == 1) DAG->output_rc_msa(para, mm->rid_to_ord, seqs);
   else if (para->result == 2) DAG->output_gfa(mm->rid_to_ord, seqs);
-  std::cerr << "3:" << "\n";
 
   // std::cout << "correct check" << "\n";
   // std::string s1 = "TTGCCCTT";

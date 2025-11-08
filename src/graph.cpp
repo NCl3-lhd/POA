@@ -66,10 +66,6 @@ void graph::topsort(const para_t* para, int op) { // if op == 1, is not normal t
   }
 
   rank.clear();
-  if (para->enable_seeding) {
-    cons.clear();
-    cons_pos_to_id.clear();
-  }
   while (stk.size()) {
     int u = stk.back();
     stk.pop_back();
@@ -77,10 +73,6 @@ void graph::topsort(const para_t* para, int op) { // if op == 1, is not normal t
     // std::cerr << u << " ";
     cur.rank = rank.size();
     rank.emplace_back(u);
-    if (para->enable_seeding && cur.id != 0 && cur.id != 1) {  // sink not in cons
-      cons.push_back(char256_table[cur.base]);
-      cons_pos_to_id.push_back(cur.id);
-    }
     for (int i = 0; i < cur.out.size(); i++) {
       int v = cur.out[i];
       if (--deg[v] == 0) {
@@ -131,6 +123,8 @@ void graph::topsort(const para_t* para, int op) { // if op == 1, is not normal t
     }
     // lp[node[0].rank] = 0; // src lp = 0
   }
+
+  if (para->enable_seeding) build_consensus();
 }
 void graph::init(para_t* para) {
   // 清空现有数据
@@ -241,54 +235,19 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
 }
 
 void graph::output_rc_msa(para_t* para, const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs) {
-  std::cerr << node.size() << " " << rank.size() << "\n";
   if (is_topsorted == false) topsort(para, 1);
   std::vector<std::string> res(seqs.size(), std::string(rank.size() - 2, '-'));
   for (int i = 2; i < node.size(); i++) {
-    if (node[i].rank >= rank.size()) {
-      std::cerr << i << " " << node[i].rank << " " << rank.size() << "\n";
-      std::cerr << "node_id: " << i << "\n";
-      std::cerr << "base: " << char256_table[node[i].base] << "\n";
-      std::cerr << "par_id: " << node[i].par_id << "\n";
-      std::cerr << "rank: " << node[i].rank << "\n";
-      std::cerr << "deg of in: " << node[i].in.size() << "\n";
-      for (int j = 0; j < node[i].in.size(); j++) {
-        // std::cerr << node[i].in[j] << "\n";
-        std::cerr << node[node[i].in[j]].rank << " ";
-      }
-      std::cerr << "\n";
-      std::cerr << "deg of out: " << node[i].out.size() << "\n";
-      std::cerr << "num from seq: " << node[i].ids.size()<< "\n";
-      break;
-    }
-    // if (node[i].par_id >= node.size()) {
-    //   std::cerr << 0 << " ";
-    // }
-    // int rk = node[node[i].par_id].rank;
-    // if (rk >= rank.size()) std::cerr << rk << "\n";
-    // std::cerr << node[i].ids.size() << " " << rank.size() << "\n";
+    int rk = node[node[i].par_id].rank;
     for (int id : node[i].ids) {
-      // if(id >= res.size()) {
-      //   std::cerr << 1 << " ";
-      // }
-      // if(rk - 1 >= res[id].size()) {
-      //   std::cerr << 2 << " ";
-      //   std::cerr << rk - 1 << " " << res[id].size() << "\n";
-      //   break;
-      // }
-      // if (rank) res[id][rk - 1] = char256_table[node[i].base];
+      res[id][rk - 1] = char256_table[node[i].base];
     }
   }
-  // std::cerr << "2:" << "\n";
-  // for (int i = 0; i < seqs.size(); i++) {
-  //   // std::cerr << rid_to_ord[i] << "\n";
-  //   std::cerr << "3:" << "\n";
-  //   // std::cout << ">" << seqs[i].name << "\n";
-  //   std::cout << ">" << i  + 1 << "\n";
-  //   // std::cout << ">" << seqs[i].name << " " << seqs[i].comment << "\n";
-  //   std::cerr << "4:" << "\n";
-  //   // std::cout << res[rid_to_ord[i]] << "\n";
-  // }
+  for (int i = 0; i < seqs.size(); i++) {
+    if (seqs[i].name.empty()) std::cout << ">" << i + 1 << "\n";
+    else std::cout << ">" << seqs[i].name << " " << seqs[i].comment << "\n";
+    std::cout << res[rid_to_ord[i]] << "\n";
+  }
 }
 
 std::vector<int> graph::calculateR() const {
@@ -332,7 +291,7 @@ std::vector<int> graph::calculateR() const {
   return R;
 }
 
-void graph::output_consensus() {
+void graph::build_consensus() {
   std::queue<int> q;
   std::vector<int> deg(node.size());
   std::vector<int> pre(node.size());  // index is id
@@ -369,15 +328,20 @@ void graph::output_consensus() {
       }
     }
   }
-  std::string consensus;
+  cons.clear();cons_pos_to_id.clear();
   int node_id = pre[1];
   while (node_id != 0) {
-    consensus += char256_table[node[node_id].base];
+    cons += char256_table[node[node_id].base];
+    cons_pos_to_id.push_back(node_id);
     node_id = pre[node_id];
   }
-  std::reverse(consensus.begin(), consensus.end());
+  std::reverse(cons.begin(), cons.end());
+  std::reverse(cons_pos_to_id.begin(), cons_pos_to_id.end());
+}
+void graph::output_consensus() {
+  build_consensus();
   std::cout << ">" << "consensus sequence" << "\n";
-  std::cout << consensus << "\n";
+  std::cout << cons << "\n";
   return;
 }
 void graph::output_gfa(const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs) {

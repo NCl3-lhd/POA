@@ -200,7 +200,7 @@ void minimizer_t::get_guide_tree(para_t* para) {
     // use mm2 to build guide tree
     if (mm_tv.n == 0) {
       // return ord;
-      std::cerr << "no minimizer" << "\n";
+      if(para->verbose) std::cerr << "no minimizer" << "\n";
       kfree(km, mm_tv.a);
       return;
     }
@@ -221,7 +221,7 @@ void minimizer_t::get_guide_tree(para_t* para) {
     uint64_t last_x = mm_tv.a[0].x;
     int* mm_cnt = (int*)malloc(seqs_size * sizeof(int));
     for (_i = 0, i = 1; i < mm_tv.n; ++i) { // collect mm hits
-      if (i % 1000 == 0) std::cerr << "[" << i << "/" << mm_tv.n << "]" << "\n";
+      if (para->verbose && i % 1000 == 0) std::cerr << "[" << i << "/" << mm_tv.n << "]" << "\n";
       if (mm_tv.a[i].x != last_x) {
         // now [_i, i-1] have the same minimizer k-mer
         memset(mm_cnt, 0, seqs_size * sizeof(int));

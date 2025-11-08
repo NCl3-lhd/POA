@@ -21,6 +21,7 @@ struct graph {
   void topsort(const para_t* para, int op);
   void output_rc_msa(para_t* para, const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs);
   void output_consensus();
+  void build_consensus();
   void output_gfa(const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs);
   std::vector<int> calculateR() const;
   bool is_topsorted; //
