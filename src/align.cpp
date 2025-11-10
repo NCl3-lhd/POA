@@ -1344,7 +1344,7 @@ std::vector<res_t> POA_SIMD(para_t* para, const graph& DAG, const std::string& _
   return res;
 }
 
-std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end_id, int qid, const char* qseq, int qlen, aligned_buff_t* mpool) {
+std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end_id, int qid, const char* qseq, int qlen, aligned_buff_t* mpool, bool ab_band) {
   // std::chrono::microseconds total_part1(0);
   // std::chrono::microseconds total_part2(0);
   // std::chrono::microseconds total_part3(0);
@@ -1353,6 +1353,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   const std::vector<node_t>& node = DAG->node;const std::vector<int>& rank = DAG->rank;
   int beg_i = node[beg_id].rank, end_i = node[end_id].rank;
   int n = end_i - beg_i + 1, m = qlen + 1;
+  ab_band |= ab_band;
   // for (int i = beg_i; i <= end_i; i++) {
   //   std::cerr << char256_table[node[rank[i]].base];
   // }
@@ -1395,7 +1396,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   for (int i = 0; i < n; i++) {
     // Ms[i] = 0, Me[i] = m;
     int aci = beg_i + i;
-    if (para->f > 0 && !para->ab_band) {
+    if (para->f > 0 && !ab_band) {
       Ms[i] = std::max(0, std::min(DAG->hlen[aci] - DAG->hlen[beg_i], m - DAG->tlen[aci] + DAG->tlen[end_i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[aci] - DAG->hlen[beg_i], m - DAG->tlen[aci] + DAG->tlen[end_i]) + w);
     }
     else {
@@ -1442,7 +1443,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   //   Bs[i] = Ms[i] / reg_size, Be[i] = Me[i] / reg_size + reserved_reg_size; // [block_s,block_e)
   // }
   // std::cerr << w << "\n";
-  if (para->f > 0 && para->ab_band) {
+  if (para->f > 0 && ab_band) {
     // Ms[i] = std::max(0, std::min(DAG->hlen[aci] - DAG->hlen[beg_i], m + DAG->tlen[aci] - DAG->tlen[end_i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[aci] - DAG->hlen[beg_i], m + DAG->tlen[aci] - DAG->tlen[end_i]) + w);
     Ms[0] = std::max(0, std::min({ Pl[0], DAG->hlen[beg_i] - DAG->hlen[beg_i] + Ol[0], m - DAG->tlen[beg_i] + DAG->tlen[end_i] }) - w), Me[0] = std::min(m, std::max({ Pr[0], DAG->hlen[beg_i] - DAG->hlen[beg_i] + Or[0], m - DAG->tlen[beg_i] + DAG->tlen[end_i] }) + w);
     Bs[0] = Ms[0] / reg_size, Be[0] = Me[0] / reg_size + 2; // [block_s,block_e)
@@ -1481,7 +1482,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     // std::cerr << aci << " " << cur.rank << " " << char256_table[cur.base] << "\n";
     int* M_i = M[i];
     int* D_i = D[i];
-    if (para->f > 0 && para->ab_band) {  // adptive band
+    if (para->f > 0 && ab_band) {  // adptive band
       // int pmid = (Pl[i] + Pr[i]) / 2;
       // int tms = std::min({ Pl[i], DAG->hlen[i] + Ol[i], m - DAG->tlen[i] }), tme = std::max({ Pr[i], DAG->hlen[i] + Or[i], m - DAG->tlen[i] });
       // int len = std::max(pmid - tms + 1, tme - pmid);
@@ -1594,7 +1595,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     }
     _mm256_store_si256((reg*)(I_i + block_num * reg_size), Neg_inf);
 
-    if (para->f > 0 && para->ab_band) {
+    if (para->f > 0 && ab_band) {
       int max_j = 0;
       for (int j = 1; j < block_num* reg_size; j++) { // block_num * reg_size
         max_j = M_i[j] > M_i[max_j] ? j : max_j;
@@ -1725,6 +1726,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   // std::cerr << i << " " << j << " " << M[i][calj(acj, Bs[i])] << "\n";
   // std::cerr << "finsh align" << "\n";
   // std::cerr << "finish" << "\n";
+  if (para->verbose) std::cerr << "band mode:" << ab_band << "\n";
+  // if (para->verbose) std::cerr << "qlen:" << qlen << "\n";
   if (para->verbose) std::cerr << "score:" << M[i][j] << "\n";
   while (i > 0 || acj > 0) {
     // dsource
@@ -2022,7 +2025,7 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
     // for (int i = 0; i < res.size(); i++) {
     //   std::cerr << res[i].from << " " << char256_table[res[i].base] << "\n";
     // }
-    return  poa(para, DAG, 0, 1, rid, tseq.c_str(), tseq.size(), mpool);
+    return  poa(para, DAG, 0, 1, rid, tseq.c_str(), tseq.size(), mpool, para->ab_band);
     // return abPOA(para, DAG, mm, rid, tseq, mpool);
   }
   // para->enable_seeding
@@ -2031,8 +2034,9 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
   if (para->verbose) std::cerr << "collect_anchors_bycons" << "\n";
   mm128_v anchors = mm->collect_anchors_bycons(para, rid, _seq.size(), DAG->cons);
   // no chain
-  if (anchors.n == 0) {
-    return poa(para, DAG, 0, 1, rid, tseq.c_str(), tseq.size(), mpool);
+  bool ab_band = 1;
+  if (anchors.n <= 0) {
+    return poa(para, DAG, 0, 1, rid, tseq.c_str(), tseq.size(), mpool, ab_band);
   }
 
   int beg_id = 0, beg_qpos = 0, end_id = -1, end_tpos = -1, end_qpos = -1;
@@ -2044,7 +2048,7 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
     end_tpos = xi - q_span + 1, end_qpos = yi - q_span + 1;
     end_id = DAG->cons_pos_to_id[end_tpos];
     int qlen = end_qpos - beg_qpos;
-    std::vector<res_t> t_res = poa(para, DAG, beg_id, end_id, rid, tseq.c_str() + j, qlen, mpool);
+    std::vector<res_t> t_res = poa(para, DAG, beg_id, end_id, rid, tseq.c_str() + j, qlen, mpool, ab_band);
     res.insert(res.end(), t_res.begin(), t_res.end());
     j += qlen;
     for (int k = 0; k < q_span; k++, j++) {
@@ -2055,9 +2059,10 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
       }
     }
     beg_id = end_id;beg_qpos = j;
+    // ab_band = yi & MM_SEED_BAND_MODE_MASK;
   }
   int qlen = tseq.size() - beg_qpos;
-  std::vector<res_t> t_res = poa(para, DAG, beg_id, 1, rid, tseq.c_str() + j, qlen, mpool);
+  std::vector<res_t> t_res = poa(para, DAG, beg_id, 1, rid, tseq.c_str() + j, qlen, mpool, ab_band);
   res.insert(res.end(), t_res.begin(), t_res.end());
   // bool ok = 1;
   // for (int i = 0; i < res.size(); i++) {

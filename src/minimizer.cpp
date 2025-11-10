@@ -510,12 +510,13 @@ int minimizer_t::dp_chaining(const para_t* para, mm128_v* anchors, int tlen, int
   //   for (int i = 0; i < n_lchains; i++) {
   //     uint64_t xi = lchains[i].x, yi = lchains[i].y;
   //     int st = (yi >> 32), ed = (int)yi;
-  //     std::cerr << "i:" << i << "\n";
-  //     std::cerr << "tpos:" << ((int)anchors->a[st].x) << " " << (xi >> 32) << " " << tlen << "\n";
-  //     std::cerr << "cnt:"<< ed - st << "\n";
+  //     // std::cerr << "i:" << i << "\n";
+  //     // std::cerr << "tpos:" << ((int)anchors->a[st].x) << " " << (xi >> 32) << " " << tlen << "\n";
+  //     // std::cerr << "reg size:" << (xi >> 32) - ((int)anchors->a[st].x) << "\n";
+  //     // std::cerr << "cnt:"<< ed - st << "\n";
   //     // std::cerr << "i [st, ed):"<< i << " " << st << " " << ed << "\n";
-  //     // for (int i = st; i < ed; i++) {
-  //     //   std::cerr << (int)anchors->a[i].x << " ";
+  //     // for (int i = st + 1; i < ed; i++) {
+  //     //   std::cerr << ((int)anchors->a[i].x - (int)anchors->a[i - 1].x) << " ";
   //     // }
   //     std::cerr << "\n";
   //     // for (int i = st; i < ed; i++) {

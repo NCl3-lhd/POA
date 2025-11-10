@@ -316,6 +316,7 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
   uint64_t cur_y = lchains[cur_i].y, pre_x, pre_y;
   int last_tpos = tlen, last_qpos = qlen;
   int i = (uint32_t)cur_y - 1;
+  int filter_num = 0;
   while (pre_i != -1) { // collect valid anchors in local_chains[cur_i], constrained by local_chains[pre_i]
     pre_x = lchains[pre_i].x, pre_y = lchains[pre_i].y;
 
@@ -323,11 +324,17 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
 
     while (i >= 0) {
       int cur_tpos = a[i].x, cur_qpos = (int32_t)a[i].y;
+      
       if (cur_tpos > pre_end_tpos && cur_qpos > pre_end_qpos) {
         if (last_tpos - cur_tpos >= min_w && last_qpos - cur_qpos >= min_w) {
+          if (filter_num < min_w / 10) {  // add flag
+            a[i].y |= MM_SEED_BAND_MODE_MASK;// [cur_tpos, last_tpos] reg can used static band
+          }
+          filter_num = 0;
           kv_push(mm128_t, km, anchors, a[i]);
           last_tpos = cur_tpos, last_qpos = cur_qpos;
         }
+        else filter_num++;
       }
       else break;
       i--;
@@ -341,9 +348,14 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
   while (i >= 0) {
     int cur_tpos = a[i].x, cur_qpos = (int32_t)a[i].y;
     if (last_tpos - cur_tpos >= min_w && last_qpos - cur_qpos >= min_w) {
+      if (filter_num < min_w / 10) {  // add flag
+        a[i].y |= MM_SEED_BAND_MODE_MASK;
+      }
+      filter_num = 0;
       kv_push(mm128_t, km, anchors, a[i]);
       last_tpos = cur_tpos, last_qpos = cur_qpos;
     }
+    else filter_num++;
     if (i == (cur_y >> 32)) break;
     i--;
   }
