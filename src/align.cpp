@@ -1413,6 +1413,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   // std::cerr << m << " " << sum * 1.0 / n << "\n";
   // return std::vector<res_t>();
   // std::cerr << buff << "\n";
+  if (para->verbose) std::cerr << "mtx size:" << 3 * mtx_size * sizeof(int) / 1024 / 1024 / 1024 << "GB" << "\n";
   if (mpool != nullptr) mpool->alloc_aligned(&buff, SIMDTotalBytes, 3 * mtx_size * sizeof(int));
   else alloc_aligned(&buff, SIMDTotalBytes, 3 * mtx_size * sizeof(int)); // malloc
   std::vector<int*> M(n), D(n), I(n);
@@ -1660,8 +1661,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   // std::cerr << "部分1总耗时: " << total_part1.count() / 1000 << " ms\n";
   // std::cerr << "部分2总耗时: " << total_part2.count() / 1000 << " ms\n";
   // std::cerr << "部分3总耗时: " << total_part3.count() / 1000 << " ms\n";
-  int i = n - 1, acj = m;
-  int ans = M[i][calj(acj, Bs[i])];
+
   // std::cerr << ans << "\n";
   // std::cerr << n << " " << beg_i << " " << end_i << "\n";
   // std::cerr << "M:\n";
@@ -1717,6 +1717,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   // if (3 * mtx_size == 5208) std::cerr << _seq.size() << " " << seq.size() << "\n";
 
   // return res;
+  int i = n - 1, acj = m;
+  int ans = M[i][calj(acj, Bs[i])];
   int j = calj(acj, Bs[i]);
   int op = ALL_OP;
   // std::cerr << rid << "\n";
@@ -2057,7 +2059,6 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
   int qlen = tseq.size() - beg_qpos;
   std::vector<res_t> t_res = poa(para, DAG, beg_id, 1, rid, tseq.c_str() + j, qlen, mpool);
   res.insert(res.end(), t_res.begin(), t_res.end());
-  t_res = poa(para, DAG, 0, 1, rid, tseq.c_str(), tseq.size(), mpool);
   // bool ok = 1;
   // for (int i = 0; i < res.size(); i++) {
   //   if (res[i].from != t_res[i].from || res[i].base != t_res[i].base || res[i].aligned_id != t_res[i].aligned_id) {

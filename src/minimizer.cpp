@@ -200,7 +200,7 @@ void minimizer_t::get_guide_tree(para_t* para) {
     // use mm2 to build guide tree
     if (mm_tv.n == 0) {
       // return ord;
-      if(para->verbose) std::cerr << "no minimizer" << "\n";
+      if (para->verbose) std::cerr << "no minimizer" << "\n";
       kfree(km, mm_tv.a);
       return;
     }
@@ -492,37 +492,39 @@ mm128_t minimizer_t::match_mm(uint64_t mm_x, int rid) const {
 
 int minimizer_t::dp_chaining(const para_t* para, mm128_v* anchors, int tlen, int qlen) {
   // mg_lchain_dp
-  int min_w = para->poa_w + para->k;
-  int max_bw = 100, max_dis = 100, max_skip_anchors = 25, max_non_best_anchors = 50, min_local_chain_cnt = 3, min_local_chain_score = 100;
-  float chn_pen_gap = 0.8 * 0.01 * para->k, chn_pen_skip = 0.0 * 0.01 * para->k;
+  int min_w = std::min(20000, tlen / 25);
+  if (para->poa_w) min_w = std::min(min_w, para->poa_w + para->k);
+  int max_bw = para->bw, max_dis = max_bw, max_skip_anchors = 25, max_non_best_anchors = 50, min_local_chain_cnt = 3, min_local_chain_score = 100;
+  float chn_pen_gap = 0.01 * para->k, chn_pen_skip = 0.0 * 0.01 * para->k;
   int n_lchains;
   mm128_t* lchains;
   if (para->verbose) std::cerr << "initial anchor size:" << anchors->n << "\n";
-
   anchors->a = mg_lchain_dp(max_dis, max_dis, max_bw, max_skip_anchors, max_non_best_anchors, min_local_chain_cnt, min_local_chain_score, chn_pen_gap, chn_pen_skip, 0, 1, &anchors->n, anchors->a, &n_lchains, &lchains, km);
   if (para->verbose) std::cerr << "after mg_lchain_dp anchor size:" << anchors->n << "\n";
   if (para->verbose) std::cerr << "after mg_lchain_dp lchains number:" << n_lchains << "\n";
   // sort a by tpos
-  radix_sort_mm128x(lchains, lchains + n_lchains);
   // get a complete chain
+  radix_sort_mm128x(lchains, lchains + n_lchains);
   // if (para->verbose) {
   //   // std::cerr << (int)(lchains[0].y >> 32) << " " << (int)lchains[0].y << "\n";
   //   for (int i = 0; i < n_lchains; i++) {
   //     uint64_t xi = lchains[i].x, yi = lchains[i].y;
-  //     std::cerr << "tpos:" << (xi >> 32) << " " << (int)xi << "\n";
   //     int st = (yi >> 32), ed = (int)yi;
-  //     std::cerr << "i [st, ed):"<< i << " " << st << " " << ed << "\n";
-  //     for (int i = st; i < ed; i++) {
-  //       std::cerr << (int)anchors->a[i].x << " ";
-  //     }
+  //     std::cerr << "i:" << i << "\n";
+  //     std::cerr << "tpos:" << ((int)anchors->a[st].x) << " " << (xi >> 32) << " " << tlen << "\n";
+  //     std::cerr << "cnt:"<< ed - st << "\n";
+  //     // std::cerr << "i [st, ed):"<< i << " " << st << " " << ed << "\n";
+  //     // for (int i = st; i < ed; i++) {
+  //     //   std::cerr << (int)anchors->a[i].x << " ";
+  //     // }
   //     std::cerr << "\n";
-  //     for (int i = st; i < ed; i++) {
-  //       std::cerr << (int)anchors->a[i].y << " ";
-  //     }
-  //     std::cerr << "\n";
+  //     // for (int i = st; i < ed; i++) {
+  //     //   std::cerr << (int)anchors->a[i].y << " ";
+  //     // }
+  //     // std::cerr << "\n";
   //   }
-
   // }
+
   // find bug
 
   chain_dp(km, lchains, n_lchains, anchors, min_w, tlen, qlen, max_dis, max_dis, max_bw, chn_pen_gap, chn_pen_skip, 0, 1);
@@ -557,9 +559,9 @@ mm128_v minimizer_t::collect_anchors_bycons(const para_t* para, int qid, int qle
   if (para->verbose) std::cerr << "get a optimal chain through dp" << "\n";
   dp_chaining(para, &anchors, cons.size(), qlen);
   // if (para->verbose) {
-  //   std::cerr << para->k << " " << anchors.n << "\n";
+  //   std::cerr << cons.size() << "\n";
   //   for (int i = 0; i < anchors.n; i++) {
-  //     std::cerr << i << ":" << (int)anchors.a[i].x << " " << (int)(int)anchors.a[i].y << " ";
+  //     std::cerr << i << ":" << (int)anchors.a[i].x << " ";
   //   }
   //   std::cerr << "\n";
   // }

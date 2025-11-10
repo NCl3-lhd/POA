@@ -10,7 +10,7 @@ struct para_t {
   bool ab_band;
   int k, mm_w;// k-mer
   bool enable_seeding;
-  int poa_w;
+  int bw, poa_w;
   bool progressive_poa;
   int result; // result format 0 consensus,1 rc-msa 2 gfa
   int verbose;  //verbose level (0-2). 0: none, 1: information, 2: debug

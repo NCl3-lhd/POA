@@ -88,8 +88,8 @@ mm128_t* mg_chain_backtrack(void* km, int64_t n, const int32_t* f, const mm128_t
     if (t[z[k].y] == 0) {
       int64_t n_v0 = n_v, end_i;
       int32_t sc;
-      // end_i = mg_chain_bk_end(max_drop, z, f, p, t, k);
-      for (i = z[k].y; i != -1; i = p[i])
+      end_i = mg_chain_bk_end(max_drop, z, f, p, t, k);
+      for (i = z[k].y; i != end_i; i = p[i])
         ++n_v, t[i] = 1;
       sc = i < 0 ? z[k].x : (int32_t)z[k].x - f[i];
       if (sc >= min_sc && n_v > n_v0 && n_v - n_v0 >= min_cnt)
@@ -104,10 +104,12 @@ mm128_t* mg_chain_backtrack(void* km, int64_t n, const int32_t* f, const mm128_t
     if (t[z[k].y] == 0) {
       int64_t n_v0 = n_v, end_i;
       int32_t sc;
-      // end_i = mg_chain_bk_end(max_drop, z, f, p, t, k);
-      for (i = z[k].y; i != -1; i = p[i])
+      end_i = mg_chain_bk_end(max_drop, z, f, p, t, k);
+      for (i = z[k].y; i != end_i; i = p[i]) {
         v[n_v++] = i, t[i] = 1;
+      }
       sc = i < 0 ? z[k].x : (int32_t)z[k].x - f[i];
+
       if (sc >= min_sc && n_v > n_v0 && n_v - n_v0 >= min_cnt) {
         uint64_t start_id = v[n_v - 1], end_id = z[k].y;
         uint64_t strand = a[end_id].x >> 63, tpos = (uint32_t)a[end_id].x, qpos = (uint32_t)a[end_id].y;
@@ -123,6 +125,7 @@ mm128_t* mg_chain_backtrack(void* km, int64_t n, const int32_t* f, const mm128_t
       else n_v = n_v0;
     }
   }
+
   kfree(km, z);
   // assert(n_v < INT32_MAX);
   *n_u_ = n_u, * n_v_ = n_v;
@@ -245,11 +248,11 @@ int get_local_chain_score(int end_tpos_j, int end_qpos_j, int start_anchor_i, in
   while (l + 1 < r) {
     int mid = (l + r) / 2;
     int tpos_mid = (uint32_t)a[mid].x, qpos_mid = (uint32_t)a[mid].y;
-    if (tpos_mid <= end_tpos_j && qpos_mid <= end_qpos_j) l = mid;
+    if (tpos_mid <= end_tpos_j || qpos_mid <= end_qpos_j) l = mid;
     else r = mid;
   }
   if (r == end_anchor_i) return -INF;
-  return score[end_anchor_i] - score[r];
+  return score[end_anchor_i - 1] - score[r];
 }
 
 
@@ -281,17 +284,23 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
       else break;
     }
     for (int j = i - 1; j >= st; --j) {
-      uint64_t xj = lchains[j].x;
+      uint64_t xj = lchains[j].x, yj = lchains[j].y;
       int end_tpos_j = (xj >> 32) & 0x7fffffff, end_qpos_j = (int32_t)xj; //, j_end_anchor_i = iy >> 32;
-      if (end_qpos_j >= end_qpos_i) continue;
+      int start_anchor_j = yj >> 32;
+      int start_tpos_j = (int32_t)a[start_anchor_j].x, start_qpos_j = (int32_t)a[start_anchor_j].y;
+      if (start_tpos_i < start_tpos_j) continue;
       int score1 = -INF;
       if (start_tpos_i > end_tpos_j && start_qpos_i > end_qpos_j) score1 = chain_score[j] + f[end_anchor_i - 1];
       else score1 = chain_score[j] + get_local_chain_score(end_tpos_j, end_qpos_j, start_anchor_i, end_anchor_i, a, f);
+      // std::cerr << "tpos:" << start_tpos_i << " " << start_tpos_j << "\n";
+      // std::cerr << "detail:" << i << " " << j << " " << score1 << "\n";
       if (score1 > max_score) {
         max_score = score1; max_j = j;
       }
     }
     chain_score[i] = max_score; pre_chain[i] = max_j;
+    // std::cerr << i << " " << f[end_anchor_i - 1] << "\n";
+    // std::cerr << i << " " << max_score << " " << max_j << "\n";
 
     if (max_score > global_max_score) {
       global_max_score = max_score;
@@ -312,7 +321,6 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
 
     int pre_end_tpos = (pre_x >> 32) & 0x7fffffff, pre_end_qpos = (int32_t)pre_x;
 
-    i = (uint32_t)cur_y - 1;
     while (i >= 0) {
       int cur_tpos = a[i].x, cur_qpos = (int32_t)a[i].y;
       if (cur_tpos > pre_end_tpos && cur_qpos > pre_end_qpos) {
@@ -326,12 +334,13 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
       if (i == (cur_y >> 32)) break;
     }
     cur_i = pre_i, pre_i = pre_chain[pre_i], cur_y = pre_y;
+    i = (uint32_t)cur_y - 1;
   }
   // collect anchors of last chain: local_chains[cur_i]
+  // pre_end_tpos = (pre_x >> 32) & 0x7fffffff, pre_end_qpos = (int32_t)pre_x;
   while (i >= 0) {
     int cur_tpos = a[i].x, cur_qpos = (int32_t)a[i].y;
     if (last_tpos - cur_tpos >= min_w && last_qpos - cur_qpos >= min_w) {
-
       kv_push(mm128_t, km, anchors, a[i]);
       last_tpos = cur_tpos, last_qpos = cur_qpos;
     }

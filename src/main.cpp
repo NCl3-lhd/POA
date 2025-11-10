@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
     ("f,band_f", "band arg", cxxopts::value<int>()->default_value("40"))
     ("B,ab_band", "adpative band arg", cxxopts::value<bool>()->default_value("false"))
     ("S,seeding", "enable minimizer-based seeding and anchoring", cxxopts::value<bool>()->default_value("false"))
-    ("W,poa_w", "the minimum distance between adjacent anchors", cxxopts::value<int>()->default_value("500"))
+    ("W,poa_w", "the minimum distance between adjacent anchors", cxxopts::value<int>()->default_value("10000"))
     ("k,k_mer", "k_mer lenth", cxxopts::value<int>()->default_value("19")) //19
     ("w,mm_w", "k_mer_window lenth", cxxopts::value<int>()->default_value("10"))
     ("s,sample_num", "sample_num", cxxopts::value<int>()->default_value("50"))
@@ -57,6 +57,9 @@ int main(int argc, char** argv) {
       para->mat_fp = result["mat_fp"].as<std::string>();
     if (result.count("inc_fp"))
       para->inc_fp = result["inc_fp"].as<std::string>();
+    para->poa_w = 0;
+    if (result.count("poa_w"))
+      para->poa_w = result["poa_w"].as<int>();
     para->match = result["match"].as<int>();
     para->mismatch = result["mismatch"].as<int>();
     para->gap_open1 = result["gap_open"].as<int>();
@@ -66,6 +69,7 @@ int main(int argc, char** argv) {
     para->ab_band = result["ab_band"].as<bool>();
     para->k = result["k_mer"].as<int>();
     para->mm_w = result["mm_w"].as<int>();
+    para->bw = 1000;
     para->progressive_poa = result["progressive_poa"].as<bool>();
     para->enable_seeding = result["seeding"].as<bool>();
     thread = result["thread"].as<int>();
@@ -73,7 +77,7 @@ int main(int argc, char** argv) {
     if (sample_num < 0) sample_num * -1;
     para->result = result["result"].as<int>();
     para->verbose = result["verbose"].as<int>();
-    para->poa_w = result["poa_w"].as<int>();
+
   }
   catch (const cxxopts::exceptions::exception& e)
   {
