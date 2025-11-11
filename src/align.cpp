@@ -4,6 +4,7 @@
 #include <immintrin.h>  // AVX2 指令集头文件
 #include <cstring>
 #include <chrono>
+#include <omp.h>
 
 #if __AVX512BW__
 constexpr size_t SIMDTotalBytes = 64;
@@ -1345,10 +1346,10 @@ std::vector<res_t> POA_SIMD(para_t* para, const graph& DAG, const std::string& _
 }
 
 std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end_id, int qid, const char* qseq, int qlen, aligned_buff_t* mpool, bool ab_band) {
-  // std::chrono::microseconds total_part1(0);
+  std::chrono::microseconds total_part1(0);
   // std::chrono::microseconds total_part2(0);
   // std::chrono::microseconds total_part3(0);
-  // auto start1 = std::chrono::high_resolution_clock::now();
+  auto start1 = std::chrono::high_resolution_clock::now();
 
   const std::vector<node_t>& node = DAG->node;const std::vector<int>& rank = DAG->rank;
   int beg_i = node[beg_id].rank, end_i = node[end_id].rank;
@@ -1443,6 +1444,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   //   Bs[i] = Ms[i] / reg_size, Be[i] = Me[i] / reg_size + reserved_reg_size; // [block_s,block_e)
   // }
   // std::cerr << w << "\n";
+
   if (para->f > 0 && ab_band) {
     // Ms[i] = std::max(0, std::min(DAG->hlen[aci] - DAG->hlen[beg_i], m + DAG->tlen[aci] - DAG->tlen[end_i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[aci] - DAG->hlen[beg_i], m + DAG->tlen[aci] - DAG->tlen[end_i]) + w);
     Ms[0] = std::max(0, std::min({ Pl[0], DAG->hlen[beg_i] - DAG->hlen[beg_i] + Ol[0], m - DAG->tlen[beg_i] + DAG->tlen[end_i] }) - w), Me[0] = std::min(m, std::max({ Pr[0], DAG->hlen[beg_i] - DAG->hlen[beg_i] + Or[0], m - DAG->tlen[beg_i] + DAG->tlen[end_i] }) + w);
@@ -1580,7 +1582,6 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     //   std::cerr << pre_num << "\n";
     // }
     // if (i % 100 == 0) std::cout << i << "\n";
-    // auto end2 = std::chrono::high_resolution_clock::now();
     // total_part2 += std::chrono::duration_cast<std::chrono::microseconds>(end2 - start2);
     // auto start3 = std::chrono::high_resolution_clock::now();
     // I[i][0] = NEG_INF;
@@ -1655,6 +1656,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       }
     }
   }
+  auto end1 = std::chrono::high_resolution_clock::now();
+
   // std::cerr << sum * 1.0 / (1ll * n * m) << "\n";
   // std::cerr << "anchor num:" << tot << "\n";
   // std::cerr << "sum_offset" << max << "\n";
@@ -1729,6 +1732,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   if (para->verbose) std::cerr << "band mode:" << ab_band << "\n";
   // if (para->verbose) std::cerr << "qlen:" << qlen << "\n";
   if (para->verbose) std::cerr << "score:" << M[i][j] << "\n";
+  total_part1 += std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
+  if (para->verbose) std::cerr << "部分1总耗时: " << total_part1.count() / 1000 << " ms\n";
   while (i > 0 || acj > 0) {
     // dsource
     j = calj(acj, Bs[i]);
@@ -2038,32 +2043,64 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
   if (anchors.n <= 0) {
     return poa(para, DAG, 0, 1, rid, tseq.c_str(), tseq.size(), mpool, ab_band);
   }
-
-  int beg_id = 0, beg_qpos = 0, end_id = -1, end_tpos = -1, end_qpos = -1;
-  int j = 0;
-  if (para->verbose) std::cerr << "subgraph poa" << "\n";
-  for (int i = 0; i < anchors.n; i++) {
-    uint64_t xi = anchors.a[i].x, yi = anchors.a[i].y;
-    int q_span = yi >> 32 & 0xff;
-    end_tpos = xi - q_span + 1, end_qpos = yi - q_span + 1;
-    end_id = DAG->cons_pos_to_id[end_tpos];
-    int qlen = end_qpos - beg_qpos;
-    std::vector<res_t> t_res = poa(para, DAG, beg_id, end_id, rid, tseq.c_str() + j, qlen, mpool, ab_band);
-    res.insert(res.end(), t_res.begin(), t_res.end());
-    j += qlen;
-    for (int k = 0; k < q_span; k++, j++) {
-      end_id = DAG->cons_pos_to_id[end_tpos + k];
-      if (k != q_span - 1) {
-        const node_t& cur = DAG->node[end_id];
-        res.emplace_back(res_t(cur.id, cur.base));
+  if (para->thread <= 1) {
+    int beg_id = 0, beg_qpos = 0, end_id = -1, end_tpos = -1, end_qpos = -1;
+    int j = 0;
+    if (para->verbose) std::cerr << "subgraph poa" << "\n";
+    for (int i = 0; i < anchors.n; i++) {
+      uint64_t xi = anchors.a[i].x, yi = anchors.a[i].y;
+      int q_span = yi >> 32 & 0xff;
+      end_tpos = xi - q_span + 1, end_qpos = yi - q_span + 1;
+      end_id = DAG->cons_pos_to_id[end_tpos];
+      int qlen = end_qpos - beg_qpos;
+      std::vector<res_t> t_res = poa(para, DAG, beg_id, end_id, rid, tseq.c_str() + j, qlen, mpool, ab_band);
+      res.insert(res.end(), t_res.begin(), t_res.end());
+      j += qlen;
+      for (int k = 0; k < q_span; k++, j++) {
+        end_id = DAG->cons_pos_to_id[end_tpos + k];
+        if (k != q_span - 1) {
+          const node_t& cur = DAG->node[end_id];
+          res.emplace_back(res_t(cur.id, cur.base));
+        }
       }
+      beg_id = end_id;beg_qpos = j;
+      // ab_band = yi & MM_SEED_BAND_MODE_MASK;
     }
-    beg_id = end_id;beg_qpos = j;
-    // ab_band = yi & MM_SEED_BAND_MODE_MASK;
+    int qlen = tseq.size() - beg_qpos;
+    std::vector<res_t> t_res = poa(para, DAG, beg_id, 1, rid, tseq.c_str() + j, qlen, mpool, ab_band);
+    res.insert(res.end(), t_res.begin(), t_res.end());
   }
-  int qlen = tseq.size() - beg_qpos;
-  std::vector<res_t> t_res = poa(para, DAG, beg_id, 1, rid, tseq.c_str() + j, qlen, mpool, ab_band);
-  res.insert(res.end(), t_res.begin(), t_res.end());
+  else {
+    int n = anchors.n;
+    std::vector<std::vector<res_t>> res_v;
+    res_v.resize(n + 1);
+    #pragma omp parallel for num_threads(para->thread) schedule(static)
+    for (int i = 0; i < n + 1; i++) {
+      int tid = omp_get_thread_num();
+      int beg_id, end_id, start_qpos, qlen, q_span = para->k, end_qpos;
+      beg_id = i == 0 ? 0 : DAG->cons_pos_to_id[(int)anchors.a[i - 1].x];
+      end_id = i == n ? 1 : DAG->cons_pos_to_id[(int)anchors.a[i].x - q_span + 1];
+      end_qpos = i == n ? tseq.size() : (int)anchors.a[i].y - q_span + 1;
+      start_qpos = i == 0 ? 0 : (int)anchors.a[i - 1].y + 1;
+      qlen = end_qpos - start_qpos;
+      std::vector<res_t> ret = poa(para, DAG, beg_id, end_id, rid, tseq.c_str() + start_qpos, qlen, &mpool[tid], ab_band);
+      if (i < n) {
+        for (int k = 0; k < q_span - 1; k++) {
+          int end_tpos = (int)anchors.a[i].x - q_span + 1;
+          int cur_id = DAG->cons_pos_to_id[end_tpos + k];
+          const node_t& cur = DAG->node[cur_id];
+          ret.emplace_back(res_t(cur.id, cur.base));
+        }
+      }
+      res_v[i] = ret;
+    }
+    std::cerr << "cat" << "\n";
+    for (int i = 0; i < res_v.size(); i++) {
+      res.insert(res.end(), res_v[i].begin(), res_v[i].end());
+    }
+  }
+
+
   // bool ok = 1;
   // for (int i = 0; i < res.size(); i++) {
   //   if (res[i].from != t_res[i].from || res[i].base != t_res[i].base || res[i].aligned_id != t_res[i].aligned_id) {
@@ -2084,6 +2121,7 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
   // }
   // // if (!ok) exit(1);
   // // for (int i = 0)
+  std::cerr << "free" << "\n";
   // free anchors
   kfree(mm->km, anchors.a);
   return res;

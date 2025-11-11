@@ -492,7 +492,7 @@ mm128_t minimizer_t::match_mm(uint64_t mm_x, int rid) const {
 
 int minimizer_t::dp_chaining(const para_t* para, mm128_v* anchors, int tlen, int qlen) {
   // mg_lchain_dp
-  int min_w = std::min(20000, tlen / 25);
+  int min_w = std::min(20000, (tlen + 24 - 1) / 24);
   if (para->poa_w) min_w = std::min(min_w, para->poa_w + para->k);
   int max_bw = para->bw, max_dis = max_bw, max_skip_anchors = 25, max_non_best_anchors = 50, min_local_chain_cnt = 3, min_local_chain_score = 100;
   float chn_pen_gap = 0.01 * para->k, chn_pen_skip = 0.0 * 0.01 * para->k;

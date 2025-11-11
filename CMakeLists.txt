@@ -12,6 +12,10 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
 # 1. 查找 zlib 包
 find_package(ZLIB REQUIRED)
 
+find_package(OpenMP)
+add_compile_options(-Wunknown-pragmas)
+
+
 # 查找 src 目录下的所有 .cpp 文件
 file(GLOB SOURCES "src/*.cpp" "include/*.c")
 
@@ -19,7 +23,7 @@ file(GLOB SOURCES "src/*.cpp" "include/*.c")
 add_executable(POA ${SOURCES})
 
 target_link_libraries(POA PRIVATE ZLIB::ZLIB)
-
+target_link_libraries(POA PRIVATE OpenMP::OpenMP_CXX)
 # 设置头文件路径
 target_include_directories(POA PRIVATE
     ${PROJECT_SOURCE_DIR}/include

@@ -26,7 +26,7 @@ int main(int argc, char** argv) {
     ("X,mismatch", "mismatch sorce", cxxopts::value<int>()->default_value("-4"))
     ("O,gap_open", "gap_open sorce", cxxopts::value<int>()->default_value("-4"))
     ("E,gap_ext", "gap_ext sorce", cxxopts::value<int>()->default_value("-2"))
-    ("t,thread", "thread number", cxxopts::value<int>()->default_value("0"))
+    ("t,thread", "thread number", cxxopts::value<int>()->default_value("1"))
     ("b,band_b", "band arg", cxxopts::value<int>()->default_value("100"))
     ("f,band_f", "band arg", cxxopts::value<int>()->default_value("40"))
     ("B,ab_band", "adpative band arg", cxxopts::value<bool>()->default_value("false"))
@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
     para->bw = 1000;
     para->progressive_poa = result["progressive_poa"].as<bool>();
     para->enable_seeding = result["seeding"].as<bool>();
-    thread = result["thread"].as<int>();
+    para->thread = result["thread"].as<int>();
     sample_num = result["sample_num"].as<int>();
     if (sample_num < 0) sample_num * -1;
     para->result = result["result"].as<int>();
@@ -130,8 +130,8 @@ int main(int argc, char** argv) {
   // seqs[0].seq = "TTGCCCTT";
   // seqs[1].seq = "CCAATTTT";
   // seqs[2].seq = "TGCT";
-  if (!thread) { // 
-    aligned_buff_t mpool;
+  if (1) { // 
+    aligned_buff_t* mpool = new aligned_buff_t[para->thread];
     for (int i = exist_seq_num; i < seqs.size(); i++) {  //seqs.size()
       rid = ord[i];
       if (para->verbose && i % 10 == 0) {
@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
       // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
       // std::vector<res_t> res = abPOA(para, DAG, mm, rid, tseq, &mpool);
       if (para->verbose) std::cerr << "aligment" << "\n";
-      std::vector<res_t> res = alignment(para, DAG, mm, rid, seqs[rid].seq, &mpool);
+      std::vector<res_t> res = alignment(para, DAG, mm, rid, seqs[rid].seq, mpool);
       // return 0;
       // std::cerr << "add_path" << "\n";
       if (para->verbose) std::cerr << "add path" << "\n";
@@ -163,6 +163,7 @@ int main(int argc, char** argv) {
     // DAG->output_rc_msa(mm->rid_to_ord, seqs);
     // std::cerr << minl << " " << maxl << '\n';
     // delete mpool; 
+    delete[] mpool;
   }
   else {
     ThreadPool pool(thread);
