@@ -3,6 +3,8 @@
 #include "cstring"
 #include "kvec.h"
 #include <iostream>
+/* modified from lh3/minimap2/lchain.c */
+/********** start *************/
 constexpr int INF = 1e9;
 static int64_t mg_chain_bk_end(int32_t max_drop, const mm128_t* z, const int32_t* f, const int64_t* p, int32_t* t, int64_t k)
 {
@@ -242,6 +244,8 @@ mm128_t* mg_lchain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int 
   *_n = n_v;
   return compact_a(km, n_u, u, n_v, v, a);
 }
+/************ end *************/
+
 
 int get_local_chain_score(int end_tpos_j, int end_qpos_j, int start_anchor_i, int end_anchor_i, mm128_t* a, int* score) {
   int l = start_anchor_i, r = end_anchor_i;
@@ -255,7 +259,8 @@ int get_local_chain_score(int end_tpos_j, int end_qpos_j, int start_anchor_i, in
   return score[end_anchor_i - 1] - score[r];
 }
 
-
+/* modified from yangao07/abPOA/abpoa_seed.c */
+/********** start *************/
 //   a[].x: rev<<63 | tid<<32 | tpos
 //   a[].y: qid << 48 | flags << 40 | q_span << 32 | q_pos
 // local chains:
@@ -379,3 +384,4 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
   kfree(km, chain_score), kfree(km, pre_chain);
   return 0;
 }
+/************ end *************/
