@@ -17,17 +17,16 @@ add_compile_options(-Wunknown-pragmas)
 
 
 # 查找 src 目录下的所有 .cpp 文件
-file(GLOB SOURCES "src/*.cpp" "include/*.c")
+file(GLOB SOURCES "src/*.cpp" "src/*.c")
 
 # 添加可执行文件
-add_executable(POA ${SOURCES})
+add_executable(minipoa ${SOURCES})
 
-target_link_libraries(POA PRIVATE ZLIB::ZLIB)
-target_link_libraries(POA PRIVATE OpenMP::OpenMP_CXX)
+target_link_libraries(minipoa PRIVATE ZLIB::ZLIB)
+target_link_libraries(minipoa PRIVATE OpenMP::OpenMP_CXX)
 # 设置头文件路径
-target_include_directories(POA PRIVATE
+target_include_directories(minipoa PRIVATE
     ${PROJECT_SOURCE_DIR}/include
-    ${PROJECT_SOURCE_DIR}/src
 )
 
 # 设置默认构建类型为Release（自动包含-O3）

@@ -91,8 +91,7 @@ int main(int argc, char** argv) {
   graph* DAG = new graph();
   DAG->init(para);
   if (!para->inc_fp.empty()) seqs = read_gfa(para, DAG, para->inc_fp.c_str());
-  // std::cerr << DAG->node.size() << "\n";
-  // return 0;
+
   int exist_seq_num = seqs.size();
   try {
     if (!path.empty()) readFile(seqs, path.c_str());
@@ -102,162 +101,40 @@ int main(int argc, char** argv) {
     std::cerr << "error read file: " << e.what() << std::endl;
     return 1;
   }
-  // std::cerr << seqs.size() << "\n";
-  // seqs.resize(660);
-  // handle alignment 
-  // std::sort(ord.begin(), ord.end(), [&](const int& i, const int& j) {
-  //   return  seqs[i].seq.size() > seqs[j].seq.size();
-  // });
+
   if (para->verbose && para->enable_seeding) std::cerr << "collect minimizer" << "\n";
   minimizer_t* mm = new minimizer_t(para, seqs);
   if (para->verbose && para->progressive_poa) std::cerr << "build guide tree" << "\n";
   if (para->inc_fp.empty() && para->progressive_poa) {
     if (para->verbose) std::cerr << "progressive" << "\n";
     mm->get_guide_tree(para);
-    // std::reverse(ord.begin(), ord.end());
-    // for (int i = 0; i < seqs.size(); i++) {
-    //   std::cerr << ord[i] << "\n";
-    // }
   }
   const std::vector<int>& ord = mm->ord;
-  // std::cerr << mm.mm_v.n << "\n";
 
   int rid;
-  // for (int i = 0; i < seqs.size(); i++) {
-  //   std::cout << i << " " << ord[i] << " " << seqs[ord[i]].seq.size() << "\n";
-  // }
   if (para->verbose) std::cerr << "poa" << "\n";
-  // seqs[0].seq = "TTGCCCTT";
-  // seqs[1].seq = "CCAATTTT";
-  // seqs[2].seq = "TGCT";
-  if (1) { // 
-    aligned_buff_t* mpool = new aligned_buff_t[para->thread];
-    for (int i = exist_seq_num; i < seqs.size(); i++) {  //seqs.size()
-      rid = ord[i];
-      if (para->verbose && i % 10 == 0) {
-        std::cerr << "[" << i << "/" << seqs.size() << "]" << "\n";
-      }
-
-      // std::string tseq;
-      // tseq += char26_table['N'];
-      // for (int j = 0; j < seqs[rid].seq.size(); j++) {
-      //   tseq += char26_table[seqs[rid].seq[j]];
-      // }
-      // std::cerr << "poa" << "\n";
-      // POA_SIMD(para, DAG, tseq);
-      // std::vector<res_t> res = POA(para, DAG, tseq);
-      // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
-      // std::vector<res_t> res = abPOA(para, DAG, mm, rid, tseq, &mpool);
-      if (para->verbose) std::cerr << "aligment" << "\n";
-      std::vector<res_t> res = alignment(para, DAG, mm, rid, seqs[rid].seq, mpool);
-      // return 0;
-      // std::cerr << "add_path" << "\n";
-      if (para->verbose) std::cerr << "add path" << "\n";
-      DAG->add_path(para->m, i, res);
-      // std::cerr << "topsort" << "\n";
-      if (para->verbose) std::cerr << "topsort" << "\n";
-      DAG->topsort(para, i + 1 == seqs.size());
-      // std::cout << i << " " << DAG->rank.size() << "\n";
+  aligned_buff_t* mpool = new aligned_buff_t[para->thread];
+  for (int i = exist_seq_num; i < seqs.size(); i++) {  //seqs.size()
+    rid = ord[i];
+    if (para->verbose && i % 10 == 0) {
+      std::cerr << "[" << i << "/" << seqs.size() << "]" << "\n";
     }
-    // handle output 
-    // DAG->output_rc_msa(mm->rid_to_ord, seqs);
-    // std::cerr << minl << " " << maxl << '\n';
-    // delete mpool; 
-    delete[] mpool;
+    if (para->verbose) std::cerr << "aligment" << "\n";
+    std::vector<res_t> res = alignment(para, DAG, mm, rid, seqs[rid].seq, mpool);
+    if (para->verbose) std::cerr << "add path" << "\n";
+    DAG->add_path(para->m, i, res);
+    if (para->verbose) std::cerr << "topsort" << "\n";
+    DAG->topsort(para, i + 1 == seqs.size());
   }
-  else {
-    ThreadPool pool(thread);
-    aligned_buff_t* mpool = new aligned_buff_t[thread];
-    // std::cerr << "thread:" << thread << "\n";
-    std::vector<std::future<std::vector<res_t>> > results;
-    // sample_num = 0;
-    for (int i = exist_seq_num; i < seqs.size() && i - exist_seq_num < sample_num; i++) { // ensure parallel before DAG have the enough sample seq
-      rid = ord[i];
-      if (para->verbose && i % 10 == 0) {
-        std::cerr << "[" << i << "/" << seqs.size() << "]" << "\n";
-      }
-      // std::string tseq;
-      // tseq += char26_table['N'];
-      // for (int j = 0; j < seqs[rid].seq.size(); j++) {
-      //   tseq += char26_table[seqs[rid].seq[j]];
-      // }
-      // std::cerr << "poa" << "\n";
-      // POA_SIMD(para, DAG, tseq);
-      // std::vector<res_t> res = POA(para, DAG, tseq);
-      // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
-      // std::vector<res_t> res = abPOA(para, DAG, mm, rid, tseq, &mpool[0]);
-      std::vector<res_t> res = alignment(para, DAG, mm, rid, seqs[rid].seq, &mpool[0]);
-      // return 0;
-      // std::cerr << "add_path" << "\n";
-      DAG->add_path(para->m, i, res);
-      // std::cerr << "topsort" << "\n";
-      DAG->topsort(para, i + 1 == seqs.size());
-    }
-    for (int i = exist_seq_num + sample_num; i < seqs.size(); i += thread) {  //seqs.size()
-      results.clear();
-      for (int j = 0; j < thread && i + j < seqs.size(); j++) {
-        rid = ord[i + j];
-        // const char* seq_i = seqs[i].seq.c_str();
-        const std::string& seq_i = seqs[rid].seq;
-        aligned_buff_t* cur_mpool = &mpool[j];
-        results.emplace_back(
-          pool.enqueue([para, DAG, mm, rid, &seq_i, cur_mpool] {
-          // std::string tseq;
-          // tseq += char26_table['N'];
-          // for (int j = 0; j < seq_i.size(); j++) {
-          //   tseq += char26_table[seq_i[j]];
-          // }
-          // std::vector<res_t> res = abPOA(para, DAG, mm, rid, tseq, cur_mpool);
-          std::vector<res_t> res = alignment(para, DAG, mm, rid, seq_i, cur_mpool);
-          return res;
-        }));
-      }
-      std::vector<std::vector<res_t>> res;
-      if (para->verbose) {
-        std::cerr << "[" << i << "/" << seqs.size() << "]" << "\n";
-      }
-      for (auto&& result : results) {
-        res.emplace_back(result.get());
-      }
 
-      // std::cerr << "add_path" << "\n";
-      int node_num = DAG->node.size();
-      for (int j = 0; j < res.size(); j++) {
-        rid = ord[i + j];
-        DAG->add_path(para->m, i + j, res[j], node_num);
-      }
-      // std::cerr << "topsort:" << "\n";
-      DAG->topsort(para, i + thread >= seqs.size());
-      // std::cerr << "poa" << "\n";
-      // POA_SIMD(para, DAG, tseq);
-      // std::vector<res_t> res = POA(para, DAG, tseq);
-      // std::vector<res_t> res = POA_SIMD(para, DAG, tseq);
-      // std::cerr << "topsort" << "\n";
-      // std::cout << i << " " << DAG->rank.size() << "\n";
-    }
-    // handle output 
-    // std::cerr << "output" << '\n';
-    // std::cerr << "delete" << "\n";
-    delete[] mpool;
-    // std::cerr << "finish" << "\n";
-  }
-  if(para->verbose) std::cerr << "out_put" << "\n";
+  if (para->verbose) std::cerr << "out_put" << "\n";
   if (para->result == 0) DAG->output_consensus();
   else if (para->result == 1) DAG->output_rc_msa(para, mm->rid_to_ord, seqs);
   else if (para->result == 2) DAG->output_gfa(mm->rid_to_ord, seqs);
 
-  // std::cout << "correct check" << "\n";
-  // std::string s1 = "TTGCCCTT";
-  // std::string s2 = "CCAATTTT";
-  // std::string s3 = "CCTT";
-  // std::string s4 = "TTGCCCAATTTT";
-  // std::string alignedS, alignedT;
-  // std::cout << PSA_Kband(s1, seqs[2].seq, &alignedS, &alignedT) << "\n";
-  // std::cout << alignedS << " " << alignedT << "\n";
-  // std::cout << PSA_Kband(s2, seqs[2].seq, nullptr, nullptr) << "\n";
-  // std::cout << PSA_Kband(s3, seqs[2].seq, nullptr, nullptr) << "\n";
-  // std::cout << PSA_Kband(s4, seqs[2].seq, nullptr, nullptr) << "\n";
   // delete
+  delete[] mpool;
+  mpool = nullptr;  // 防止后续误用
   delete para;
   para = nullptr;  // 防止后续误用
   delete DAG;

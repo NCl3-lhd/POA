@@ -17,7 +17,10 @@
 
 3. run
    ```bash
-   ./bin/POA -i ./data/mtDNA.fasta 
+   # consensus calling
+   ./bin/minipoa ./data/mtDNA.fasta > mtDNA.cons
+   # multiple sequence alignment
+   ./bin/minipoa ./data/mtDNA.fasta -S -t 12 -r1 > mtDNA.msa
    ```
 
 4. clean
@@ -27,7 +30,7 @@
 
 ## License
 
-Staralign is released under the MIT license. See the file LICENSE for more details.
+minipoa is released under the MIT license. See the file LICENSE for more details.
 
 ## Contact
 
