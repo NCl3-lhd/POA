@@ -1,16 +1,16 @@
-# POA
-> A respository for POA project
+# minimap
+> A respository for minipoa project
 
 ## How to use?
 
 1. git clone this repository
    ```bash
-   git clone https://github.com/NCl3-lhd/POA.git
+   git clone https://github.com/NCl3-lhd/minipoa.git
    ```
 
 2. make
    ```bash
-   cd POA
+   cd minipoa
    cmake -S . -B build
    cmake --build build
    ```
