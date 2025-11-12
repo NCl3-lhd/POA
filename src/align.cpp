@@ -150,8 +150,13 @@ std::vector<res_t> abPOA(const para_t* para, const graph* DAG, const minimizer_t
   // std::chrono::microseconds total_part3(0);
   // auto start1 = std::chrono::high_resolution_clock::now();
 
-  int n = DAG->node.size(), m = _seq.size();
-  std::string seq = _seq;
+  int n = DAG->node.size(), m = _seq.size() + 1;
+  std::string seq;
+  seq += char26_table['N'];
+  // seq += node[beg_id].base;
+  for (int j = 0; j < _seq.size(); j++) {
+    seq += char26_table[_seq[j]];
+  }
   assert(seq[0] == para->m - 1);
   std::vector<res_t> res;
   if (n <= 2) {
@@ -1360,7 +1365,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   // }
   // std::cerr << "\n";
   std::string seq;
-  seq += char256_table['N'];
+  seq += char26_table['N'];
   // seq += node[beg_id].base;
   for (int j = 0; j < qlen; j++) {
     seq += char26_table[qseq[j]];
@@ -1518,7 +1523,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       //   // std::cerr << cur.rank << " " << char256_table[cur.base] << "\n";
       // }
       if (p < 0) continue;
-      reg PRE_BASE = _mm256_set1_epi32(p == 0 ? char256_table['N'] : pre.base);
+      reg PRE_BASE = _mm256_set1_epi32(p == 0 ? char26_table['N'] : pre.base);
       int prev = NEG_INF;
       char prech = char26_table['N'];
       int* M_p = M[p];
@@ -1832,7 +1837,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         const node_t& pre = node[cur.in[k]];
         int p = pre.rank - beg_i; // rank
         if (p < 0) continue;
-        int pre_base = p == 0 ? char256_table['N'] : pre.base;
+        int pre_base = p == 0 ? char26_table['N'] : pre.base;
         if (pre_base != seq[acj - 1]) continue;
         // M
         int pj = calj(acj, Bs[p]);
@@ -1849,7 +1854,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       if (bk != -1 && cur.in_weight[bk] >= cur.ind / 10) {  // backtrack based on the normal sample
         const node_t& pre = node[cur.in[bk]];
         int p = pre.rank - beg_i; // rank
-        int pre_base = p == 0 ? char256_table['N'] : pre.base;
+        int pre_base = p == 0 ? char26_table['N'] : pre.base;
         if (pre_base == seq[acj - 1]) {
           // std::cout << "M";
           res.emplace_back(res_t(pre.id, pre.base));
@@ -1939,7 +1944,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         const node_t& pre = node[cur.in[k]];
         int p = pre.rank - beg_i; // rank
         if (p < 0) continue;
-        int pre_base = p == 0 ? char256_table['N'] : pre.base;
+        int pre_base = p == 0 ? char26_table['N'] : pre.base;
         // if (pre.base != seq[acj - 1]) continue;
         // M
         int pj = calj(acj, Bs[p]);
@@ -1958,7 +1963,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         op = ALL_OP;
         const node_t& pre = node[cur.in[bk]];
         int p = pre.rank - beg_i; // rank
-        int pre_base = p == 0 ? char256_table['N'] : pre.base;
+        int pre_base = p == 0 ? char26_table['N'] : pre.base;
         if (pre_base == seq[acj - 1]) {
           // std::cout << "M";
           res.emplace_back(res_t(pre.id, pre.base));
@@ -2013,7 +2018,7 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
   }
   std::vector<res_t> res;
   if (DAG->node.size() <= 2) {
-    res.emplace_back(res_t(0, 'N'));
+    res.emplace_back(res_t(0, char26_table['N']));
     for (int j = 0; j < tseq.size(); j++) {
       res.emplace_back(res_t(-1, tseq[j]));
     }
@@ -2041,6 +2046,7 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
   // no chain
   bool ab_band = 1;
   if (anchors.n <= 0) {
+    // return abPOA(para, DAG, mm, rid, tseq, mpool);
     return poa(para, DAG, 0, 1, rid, tseq.c_str(), tseq.size(), mpool, ab_band);
   }
   if (para->thread <= 1) {
@@ -2094,7 +2100,6 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
       }
       res_v[i] = ret;
     }
-    std::cerr << "cat" << "\n";
     for (int i = 0; i < res_v.size(); i++) {
       res.insert(res.end(), res_v[i].begin(), res_v[i].end());
     }
@@ -2121,7 +2126,6 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
   // }
   // // if (!ok) exit(1);
   // // for (int i = 0)
-  std::cerr << "free" << "\n";
   // free anchors
   kfree(mm->km, anchors.a);
   return res;
