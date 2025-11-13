@@ -1,15 +1,8 @@
 #include <iostream>
-#include "cxxopts.hpp"
-#include "handle_input.h"
-#include "parameter.h"
-#include "graph.h"
-#include "align.h"
-#include <immintrin.h>
-#include "mem_alloc_utils.h"
-#include "ThreadPool.h"
 #include <algorithm>
 #include <numeric>
-#include "minimizer.h"
+#include "cxxopts.hpp"
+#include "minipoa.h"
 // #include "kband.h"
 
 // extern unsigned char nt4_table[256];
@@ -74,7 +67,7 @@ int main(int argc, char** argv) {
     para->enable_seeding = result["seeding"].as<bool>();
     para->thread = result["thread"].as<int>();
     sample_num = result["sample_num"].as<int>();
-    if (sample_num < 0) sample_num * -1;
+    if (sample_num < 0) sample_num *= -1;
     para->result = result["result"].as<int>();
     para->verbose = result["verbose"].as<int>();
 
