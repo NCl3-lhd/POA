@@ -115,7 +115,7 @@ int main(int argc, char** argv) {
     if (para->verbose) std::cerr << "aligment" << "\n";
     std::vector<res_t> res = alignment(para, DAG, mm, rid, seqs[rid].seq, mpool);
     if (para->verbose) std::cerr << "add path" << "\n";
-    DAG->add_path(para->m, i, res);
+    DAG->add_path(para->m, i, res, 1);
     if (para->verbose) std::cerr << "topsort" << "\n";
     DAG->topsort(para, i + 1 == seqs.size());
   }

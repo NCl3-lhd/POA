@@ -167,7 +167,7 @@ void graph::init(para_t* para, int seq_id, const std::string& str) {
   add_adj(0, pre_id, 1, str.size()); // 
   topsort(para, 0);
 }
-void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int graph_node_num) {
+void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int sink_id) {
   // node_h.emplace_back(node.size());
   int anchored_id = -1; // sink
   // std::cerr << seq_id << " " << res.size() << "\n";
@@ -192,21 +192,21 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
       }
       else {
         // std::cerr << 3 << "\n";
-        if (graph_node_num > 0) {
-          for (int k = 0; anchored_id != -1 && k < node[anchored_id].out.size(); k++) {
-            int v = node[anchored_id].out[k];
-            if (node[v].base == res[i].base && v >= graph_node_num && node[v].par_id == v) {
-              cur_id = v;
-              break;
-            }
-          }
-          // for (int k = 0; k < node[anchored_id].in.size(); k++) {
-          //   int v = node[anchored_id].in[k];
-          //   if ((node[v].base ^ 2) == res[i].base && v >= graph_node_num) {
-          //     cur_id = v;
-          //   }
-          // }
-        }
+        // if (graph_node_num > 0) {
+        //   for (int k = 0; anchored_id != -1 && k < node[anchored_id].out.size(); k++) {
+        //     int v = node[anchored_id].out[k];
+        //     if (node[v].base == res[i].base && v >= graph_node_num && node[v].par_id == v) {
+        //       cur_id = v;
+        //       break;
+        //     }
+        //   }
+        //   // for (int k = 0; k < node[anchored_id].in.size(); k++) {
+        //   //   int v = node[anchored_id].in[k];
+        //   //   if ((node[v].base ^ 2) == res[i].base && v >= graph_node_num) {
+        //   //     cur_id = v;
+        //   //   }
+        //   // }
+        // }
         if (cur_id < 0) {
           cur_id = node.size();
           node.emplace_back(node_t(cur_id, res[i].base, para_m));
@@ -229,7 +229,7 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
     }
     anchored_id = cur_id;
   }
-  add_adj(seq_id, anchored_id, 1, curPos); // anchored -> sink
+  if(sink_id != -1) add_adj(seq_id, anchored_id, sink_id, curPos); // anchored -> sink
   is_topsorted = false;
   // std::cerr << "finish add path" << "\n";
 }
@@ -291,7 +291,7 @@ std::vector<int> graph::calculateR() const {
   return R;
 }
 
-void graph::build_consensus() {
+void graph::build_consensus(bool needCoverages) {
   std::queue<int> q;
   std::vector<int> deg(node.size());
   std::vector<int> pre(node.size());  // index is id
@@ -328,18 +328,29 @@ void graph::build_consensus() {
       }
     }
   }
+  if (needCoverages) coverages.clear();
   cons.clear();cons_pos_to_id.clear();
   int node_id = pre[1];
   while (node_id != 0) {
-    cons += char256_table[node[node_id].base];
-    cons_pos_to_id.push_back(node_id);
+    const node_t & cur = node[node_id];
+    cons += char256_table[cur.base];
+    cons_pos_to_id.push_back(cur.id);
+    int in_w = 0, out_w = 0;
+    for (int i = 0; i < cur.in_weight.size(); i++) {
+      in_w += cur.in_weight[i];
+    }
+    for (int i = 0; i < cur.out_weight.size(); i++) {
+      out_w += cur.out_weight[i];
+    }
+    coverages.push_back(std::max(in_w, out_w));
     node_id = pre[node_id];
   }
   std::reverse(cons.begin(), cons.end());
   std::reverse(cons_pos_to_id.begin(), cons_pos_to_id.end());
+  if (needCoverages) std::reverse(coverages.begin(), coverages.end());
 }
-void graph::output_consensus() {
-  build_consensus();
+void graph::output_consensus(bool needCoverages) {
+  build_consensus(needCoverages);
   std::cout << ">" << "consensus sequence" << "\n";
   std::cout << cons << "\n";
   return;

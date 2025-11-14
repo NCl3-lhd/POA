@@ -17,16 +17,17 @@ struct graph {
   void init(para_t* para, int seq_id, const std::string& str);
   int add_node(para_t* para, char base);
   void add_adj(int seq_id, int from, int to, int curPos);
-  void add_path(int para_m, int seq_id, const std::vector<res_t>& res, int graph_node_num = 0);
+  void add_path(int para_m, int seq_id, const std::vector<res_t>& res, int sink_id = -1);
   void topsort(const para_t* para, int op);
   void output_rc_msa(para_t* para, const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs);
-  void output_consensus();
-  void build_consensus();
+  void output_consensus(bool needCoverages = false);
+  void build_consensus(bool needCoverages = false);
   void output_gfa(const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs);
   std::vector<int> calculateR() const;
   bool is_topsorted; //
   std::string cons;
   std::vector<int> cons_pos_to_id;
+  std::vector<int> coverages;
 };
 // std::vector<sequence> readFile(const char* path);
 #endif
