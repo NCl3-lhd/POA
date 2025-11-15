@@ -1738,10 +1738,10 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
 // #define sort_key_mm128x(a) ((a).x)
 // KRADIX_SORT_INIT(mm128x, mm128_t, sort_key_mm128x, 8)
 
-std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, int rid, const std::string& _seq, aligned_buff_t* mpool) {
+std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, int rid, const char* qseq, int qlen, aligned_buff_t* mpool) {
   std::string tseq;
-  for (int j = 0; j < _seq.size(); j++) {
-    tseq += char26_table[_seq[j]];
+  for (int j = 0; j < qlen; j++) {
+    tseq += char26_table[qseq[j]];
   }
   std::vector<res_t> res;
   if (DAG->node.size() <= 2) {
@@ -1759,7 +1759,7 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
   if (!DAG->is_topsorted) DAG->topsort(para, 0);
 
   if (para->verbose) std::cerr << "collect_anchors_bycons" << "\n";
-  mm128_v anchors = mm->collect_anchors_bycons(para, rid, _seq.size(), DAG->cons);
+  mm128_v anchors = mm->collect_anchors_bycons(para, rid, qlen, DAG->cons);
   // no chain
   bool ab_band = 1;
   if (anchors.n <= 0) {
