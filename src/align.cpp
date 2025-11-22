@@ -1378,12 +1378,55 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   int w = para->b;
   if (para->f) w += m / para->f;
 
+  std::vector<int> hlen(n, NEG_INF), tlen(n, NEG_INF);
+  if (para->f > 0) {
+    hlen[0] = 0;
+    std::vector<int> score(n);  // index is rank
+    for (int i = 1; i < n; i++) { // ni topsort id dp
+      int u = rank[i + beg_i];
+      const node_t& cur = node[u];
+      int wmax = -1, max_pre = -1;
+      for (int k = 0; k < cur.in.size(); k++) {
+        int v = cur.in[k];
+        int pre = node[v].rank - beg_i;
+        if (pre < 0 || hlen[pre] == NEG_INF) continue;
+        if (cur.in_weight[k] > wmax || (cur.in_weight[k] == wmax && score[pre] > score[max_pre])) {
+          wmax = cur.in_weight[k];
+          max_pre = pre;
+        }
+      }
+      if (max_pre != -1) score[cur.rank - beg_i] = score[max_pre] + wmax;
+      if (max_pre != -1) hlen[cur.rank - beg_i] = hlen[max_pre] + 1;
+      // std::cerr << u << " " << lp[i] << " " << rp[i] << "\n";
+    }
+    score.resize(node.size());
+    // tlen[node[1].rank] = 1;
+    tlen[n - 1] = 1;
+    for (int i = n - 2; i >= 0; i--) { // ni topsort id dp
+      int u = rank[i + beg_i];
+      const node_t& cur = node[u];
+      int wmax = -1, max_suc = -1;
+      for (int k = 0; k < cur.out.size(); k++) {
+        int v = cur.out[k];
+        int suc = node[v].rank - beg_i;
+        if (suc >= n || tlen[suc] == NEG_INF) continue;
+        if (cur.out_weight[k] > wmax || (cur.out_weight[k] == wmax && score[suc] > score[max_suc])) {
+          wmax = cur.out_weight[k];
+          max_suc = suc;
+        }
+      }
+      if (max_suc != -1) score[cur.rank - beg_i] = score[max_suc] + wmax;
+      if (max_suc != -1) tlen[cur.rank - beg_i] = tlen[max_suc] + 1;
+
+      // std::cerr << u << " " << lp[i] << " " << rp[i] << "\n";
+    }
+    // lp[node[0].rank] = 0; // src lp = 0
+  }
   size_t sum = 0;
   for (int i = 0; i < n; i++) {
     // Ms[i] = 0, Me[i] = m;
-    int aci = beg_i + i;
     if (para->f > 0 && !ab_band) {
-      Ms[i] = std::max(0, std::min(DAG->hlen[aci] - DAG->hlen[beg_i], m - DAG->tlen[aci] + DAG->tlen[end_i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[aci] - DAG->hlen[beg_i], m - DAG->tlen[aci] + DAG->tlen[end_i]) + w);
+      Ms[i] = std::max(0, std::min(hlen[i], m - tlen[i]) - w), Me[i] = std::min(m, std::max(hlen[i], m - tlen[i]) + w);
     }
     else {
       Ms[i] = 0, Me[i] = m;
@@ -1409,7 +1452,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   }
   if (para->f > 0 && ab_band) {
     // Ms[i] = std::max(0, std::min(DAG->hlen[aci] - DAG->hlen[beg_i], m + DAG->tlen[aci] - DAG->tlen[end_i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[aci] - DAG->hlen[beg_i], m + DAG->tlen[aci] - DAG->tlen[end_i]) + w);
-    Ms[0] = std::max(0, std::min({ Pl[0], DAG->hlen[beg_i] - DAG->hlen[beg_i] + Ol[0], m - DAG->tlen[beg_i] + DAG->tlen[end_i] }) - w), Me[0] = std::min(m, std::max({ Pr[0], DAG->hlen[beg_i] - DAG->hlen[beg_i] + Or[0], m - DAG->tlen[beg_i] + DAG->tlen[end_i] }) + w);
+    Ms[0] = std::max(0, std::min({ Pl[0], DAG->hlen[0] + Ol[0], m - tlen[0] }) - w), Me[0] = std::min(m, std::max({ Pr[0], hlen[0] + Or[0], m - tlen[0] }) + w);
     Bs[0] = Ms[0] / reg_size, Be[0] = Me[0] / reg_size + 2; // [block_s,block_e)
   }
   for (int bid = Bs[0]; bid < Be[0]; bid++) {
@@ -1428,6 +1471,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     int aci = beg_i + i;
     const node_t& cur = node[rank[aci]];
     // std::cerr << aci << " " << cur.rank << " " << char256_table[cur.base] << "\n";
+    if(hlen[i] == NEG_INF || tlen[i] == NEG_INF) continue;
     int* M_i = M[i];
     int* D_i = D[i];
     if (para->f > 0 && ab_band) {  // adptive band
@@ -1439,7 +1483,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       // int tw = para->b + (m - (DAG->hlen[i] + Ol[i])) / para->f;
 
       // Ms[i] = std::max(0, std::min({ Pl[i], DAG->hlen[i] + Ol[i], m - DAG->tlen[i] }) - w - Ow[i]), Me[i] = std::min(m, std::max({ Pr[i], DAG->hlen[i] + Or[i], m - DAG->tlen[i] }) + w + Ow[i]);
-      Ms[i] = std::max(0, std::min({ Pl[i], DAG->hlen[aci] - DAG->hlen[beg_i] + Ol[i], m - DAG->tlen[aci] + DAG->tlen[end_i] }) - w - Ow[i]), Me[i] = std::min(m, std::max({ Pr[i], DAG->hlen[aci] - DAG->hlen[beg_i] + Or[i], m - DAG->tlen[aci] + DAG->tlen[end_i] }) + w + Ow[i]);
+      Ms[i] = std::max(0, std::min({ Pl[i], hlen[i]  + Ol[i], m - tlen[i] }) - w - Ow[i]), Me[i] = std::min(m, std::max({ Pr[i], hlen[i] + Or[i], m - tlen[i]}) + w + Ow[i]);
       Bs[i] = Ms[i] / reg_size, Be[i] = Me[i] / reg_size + 2; // [block_s,block_e)
     }
     // std::cerr << Bs[i] << " " << Be[i] << "\n";
@@ -1449,7 +1493,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     for (int k = 0; k < cur.in.size(); k++) {
       const node_t& pre = node[cur.in[k]];
       int p = pre.rank - beg_i; // rank
-      if (p < 0) continue;
+      if (p < 0 || hlen[p] == NEG_INF) continue;
       reg PRE_BASE = _mm256_set1_epi32(p == 0 ? char26_table['N'] : pre.base);
       int prev = NEG_INF;
       char prech = char26_table['N'];
@@ -1539,8 +1583,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       }
       if (Sl[i] >= 30) {
         // offset_band = max_acj - DAG->hlen[i];
-        Ol[i] = max_acj - (DAG->hlen[i] - DAG->hlen[beg_i]);
-        Or[i] = max_acj - (DAG->hlen[i] - DAG->hlen[beg_i]);
+        Ol[i] = max_acj - hlen[i];
+        Or[i] = max_acj - hlen[i];
         Ow[i] = 0;
         // Sl[i] = 0;
         for (int k = 0; k < cur.out.size(); k++) {
@@ -1797,7 +1841,7 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
     int n = anchors.n;
     std::vector<std::vector<res_t>> res_v;
     res_v.resize(n + 1);
-    #pragma omp parallel for num_threads(para->thread) schedule(static)
+#pragma omp parallel for num_threads(para->thread) schedule(static)
     for (int i = 0; i < n + 1; i++) {
       int tid = omp_get_thread_num();
       int beg_id, end_id, start_qpos, qlen, q_span = para->k, end_qpos;

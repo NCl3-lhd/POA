@@ -85,44 +85,45 @@ void graph::topsort(const para_t* para, int op) { // if op == 1, is not normal t
   //   std::cerr << rank[i] << " ";
   // }
   // std::cerr << rank.size() << " " << node.size() << "\n";
-  if (para->f > 0) {
-    hlen.resize(node.size());
-    for (int i = 0; i < rank.size(); i++) { // ni topsort id dp
-      int u = rank[i];
-      const node_t& cur = node[u];
-      int wmax = -1, max_pre = -1;
-      for (int k = 0; k < cur.in.size(); k++) {
-        int v = cur.in[k];
-        int pre = node[v].rank;
-        if (cur.in_weight[k] > wmax) {
-          wmax = cur.in_weight[k];
-          max_pre = pre;
-        }
-      }
-      if (max_pre != -1) hlen[cur.rank] = hlen[max_pre] + 1;
-      // std::cerr << u << " " << lp[i] << " " << rp[i] << "\n";
-    }
+  
+  // if (para->f > 0) {
+  //   hlen.resize(node.size());
+  //   for (int i = 0; i < rank.size(); i++) { // ni topsort id dp
+  //     int u = rank[i];
+  //     const node_t& cur = node[u];
+  //     int wmax = -1, max_pre = -1;
+  //     for (int k = 0; k < cur.in.size(); k++) {
+  //       int v = cur.in[k];
+  //       int pre = node[v].rank;
+  //       if (cur.in_weight[k] > wmax) {
+  //         wmax = cur.in_weight[k];
+  //         max_pre = pre;
+  //       }
+  //     }
+  //     if (max_pre != -1) hlen[cur.rank] = hlen[max_pre] + 1;
+  //     // std::cerr << u << " " << lp[i] << " " << rp[i] << "\n";
+  //   }
 
-    tlen.resize(node.size());
-    tlen[node[1].rank] = 1;
-    for (int i = int(rank.size()) - 1; i >= 0; i--) { // ni topsort id dp
-      int u = rank[i];
-      const node_t& cur = node[u];
-      int wmax = -1, max_suc = -1;
-      for (int k = 0; k < cur.out.size(); k++) {
-        int v = cur.out[k];
-        int suc = node[v].rank;
-        if (cur.out_weight[k] > wmax) {
-          wmax = cur.out_weight[k];
-          max_suc = suc;
-        }
-      }
-      if (max_suc != -1) tlen[cur.rank] = tlen[max_suc] + 1;
+  //   tlen.resize(node.size());
+  //   tlen[node[1].rank] = 1;
+  //   for (int i = int(rank.size()) - 1; i >= 0; i--) { // ni topsort id dp
+  //     int u = rank[i];
+  //     const node_t& cur = node[u];
+  //     int wmax = -1, max_suc = -1;
+  //     for (int k = 0; k < cur.out.size(); k++) {
+  //       int v = cur.out[k];
+  //       int suc = node[v].rank;
+  //       if (cur.out_weight[k] > wmax) {
+  //         wmax = cur.out_weight[k];
+  //         max_suc = suc;
+  //       }
+  //     }
+  //     if (max_suc != -1) tlen[cur.rank] = tlen[max_suc] + 1;
 
-      // std::cerr << u << " " << lp[i] << " " << rp[i] << "\n";
-    }
-    // lp[node[0].rank] = 0; // src lp = 0
-  }
+  //     // std::cerr << u << " " << lp[i] << " " << rp[i] << "\n";
+  //   }
+  //   // lp[node[0].rank] = 0; // src lp = 0
+  // }
 
   if (para->enable_seeding) build_consensus();
 }
