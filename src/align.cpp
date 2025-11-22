@@ -1378,8 +1378,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   int w = para->b;
   if (para->f) w += m / para->f;
 
-  std::vector<int> hlen(n, NEG_INF), tlen(n, NEG_INF);
-  if (para->f > 0) {
+  std::vector<int> hlen(n), tlen(n, 1);
+  if (para->f > 0) { 
     hlen[0] = 0;
     std::vector<int> score(n);  // index is rank
     for (int i = 1; i < n; i++) { // ni topsort id dp
@@ -1395,8 +1395,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
           max_pre = pre;
         }
       }
-      if (max_pre != -1) score[cur.rank - beg_i] = score[max_pre] + wmax;
-      if (max_pre != -1) hlen[cur.rank - beg_i] = hlen[max_pre] + 1;
+      if (max_pre != -1) score[i] = score[max_pre] + wmax;
+      if (max_pre != -1) hlen[i] = hlen[max_pre] + 1;
       // std::cerr << u << " " << lp[i] << " " << rp[i] << "\n";
     }
     score.resize(node.size());
@@ -1415,8 +1415,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
           max_suc = suc;
         }
       }
-      if (max_suc != -1) score[cur.rank - beg_i] = score[max_suc] + wmax;
-      if (max_suc != -1) tlen[cur.rank - beg_i] = tlen[max_suc] + 1;
+      if (max_suc != -1) score[i] = score[max_suc] + wmax;
+      if (max_suc != -1) tlen[i] = tlen[max_suc] + 1;
 
       // std::cerr << u << " " << lp[i] << " " << rp[i] << "\n";
     }
@@ -1446,6 +1446,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
 
   for (int i = 1; i < n; i++) {
     int offset = (Be[i - 1] - Bs[i - 1]) * reg_size;
+    if (hlen[i] == NEG_INF || tlen[i] == NEG_INF) offset = 0;
     M[i] = M[i - 1] + offset;
     D[i] = D[i - 1] + offset;
     I[i] = I[i - 1] + offset;
@@ -1568,7 +1569,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       if (cur.base == seq[max_acj]) {
         for (int k = 0; k < cur.in.size(); k++) {
           int p = node[cur.in[k]].rank - beg_i; // rank
-          if (p < 0) continue;
+          if (p < 0 || hlen[p] == NEG_INF) continue;
           max_slp = Sl[p] > max_slp ? Sl[p] : max_slp;
           if (Mp[p] + 1 == Mp[i]) {
             Sl[i] = std::max(Sl[i], Sl[p] + 1);
