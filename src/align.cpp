@@ -1636,7 +1636,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       for (int k = 0; k < cur.in.size(); k++) {
         const node_t& pre = node[cur.in[k]];
         int p = pre.rank - beg_i; // rank
-        if (p < 0) continue;
+        if (p < 0 || hlen[p] == NEG_INF) continue;
         int pre_base = p == 0 ? char26_table['N'] : pre.base;
         if (pre_base != seq[acj - 1]) continue;
         // M
@@ -1677,7 +1677,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         for (int k = 0; k < cur.in.size(); k++) {
           const node_t& pre = node[cur.in[k]];
           int p = pre.rank - beg_i; // rank
-          if (p < 0) continue;
+          if (p < 0 || hlen[p] == NEG_INF) continue;
           if (Bs[p] <= acj / reg_size && acj / reg_size < Be[p] - 1) {
             int pj = calj(acj, Bs[p]);
             if (D[i][j] == M[p][pj] + o1 && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
@@ -1691,7 +1691,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
           for (int k = 0; k < cur.in.size(); k++) {
             const node_t& pre = node[cur.in[k]];
             int p = pre.rank - beg_i; // rank
-            if (p < 0) continue;
+            if (p < 0 || hlen[p] == NEG_INF) continue;
             if (Bs[p] <= acj / reg_size && acj / reg_size < Be[p] - 1) {
               int pj = calj(acj, Bs[p]);
               if (D[i][j] == D[p][pj] + e1 && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
@@ -1736,7 +1736,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       for (int k = 0; k < cur.in.size(); k++) {
         const node_t& pre = node[cur.in[k]];
         int p = pre.rank - beg_i; // rank
-        if (p < 0) continue;
+        if (p < 0 || hlen[p] == NEG_INF) continue;
         int pre_base = p == 0 ? char26_table['N'] : pre.base;
         // if (pre.base != seq[acj - 1]) continue;
         // M
