@@ -1378,7 +1378,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   int w = para->b;
   if (para->f) w += m / para->f;
 
-  std::vector<int> hlen(n), tlen(n, 1);
+  std::vector<int> hlen(n, NEG_INF), tlen(n, NEG_INF);
   if (para->f > 0) { 
     hlen[0] = 0;
     std::vector<int> score(n);  // index is rank
@@ -1432,7 +1432,9 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       Ms[i] = 0, Me[i] = m;
     }
     Bs[i] = Ms[i] / reg_size, Be[i] = Me[i] / reg_size + 2; // [block_s,block_e)
-    mtx_size += (Be[i] - Bs[i]) * reg_size;
+    int offset = (Be[i] - Bs[i]) * reg_size;
+    if (hlen[i] == NEG_INF || tlen[i] == NEG_INF) offset = 0;
+    mtx_size += offset;
     // sum += Me[i] - Ms[i] + 1;
   }
   void* buff = nullptr;
@@ -1446,7 +1448,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
 
   for (int i = 1; i < n; i++) {
     int offset = (Be[i - 1] - Bs[i - 1]) * reg_size;
-    if (hlen[i] == NEG_INF || tlen[i] == NEG_INF) offset = 0;
+    if (hlen[i - 1] == NEG_INF || tlen[i - 1] == NEG_INF) offset = 0;
     M[i] = M[i - 1] + offset;
     D[i] = D[i - 1] + offset;
     I[i] = I[i - 1] + offset;
