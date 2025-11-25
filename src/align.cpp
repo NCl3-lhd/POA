@@ -1357,7 +1357,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   const std::vector<node_t>& node = DAG->node;const std::vector<int>& rank = DAG->rank;
   int beg_i = node[beg_id].rank, end_i = node[end_id].rank;
   int n = end_i - beg_i + 1, m = qlen + 1;
-  ab_band |= ab_band;
+  ab_band |= para->ab_band;
 
   std::string seq;
   seq += char26_table['N'];
@@ -1455,7 +1455,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   }
   if (para->f > 0 && ab_band) {
     // Ms[i] = std::max(0, std::min(DAG->hlen[aci] - DAG->hlen[beg_i], m + DAG->tlen[aci] - DAG->tlen[end_i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[aci] - DAG->hlen[beg_i], m + DAG->tlen[aci] - DAG->tlen[end_i]) + w);
-    Ms[0] = std::max(0, std::min({ Pl[0], DAG->hlen[0] + Ol[0], m - tlen[0] }) - w), Me[0] = std::min(m, std::max({ Pr[0], hlen[0] + Or[0], m - tlen[0] }) + w);
+    Ms[0] = std::max(0, std::min({ Pl[0], hlen[0] + Ol[0], m - tlen[0] }) - w), Me[0] = std::min(m, std::max({ Pr[0], hlen[0] + Or[0], m - tlen[0] }) + w);
     Bs[0] = Ms[0] / reg_size, Be[0] = Me[0] / reg_size + 2; // [block_s,block_e)
   }
   for (int bid = Bs[0]; bid < Be[0]; bid++) {
