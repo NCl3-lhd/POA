@@ -1806,7 +1806,7 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
   if (!DAG->is_topsorted) DAG->topsort(para, 0);
 
   if (para->verbose) std::cerr << "collect_anchors_bycons" << "\n";
-  mm128_v anchors = mm->collect_anchors_bycons(para, rid, qlen, DAG->cons);
+  mm128_v anchors = mm->collect_anchors_bytseq(para, rid, qseq, qlen, mm->seqs_size, DAG->cons.c_str(), DAG->cons.size()); // tseq is cons
   // no chain
   bool ab_band = 1;
   if (anchors.n <= 0) {
