@@ -1438,7 +1438,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     // sum += Me[i] - Ms[i] + 1;
   }
   void* buff = nullptr;
-  if (para->verbose) std::cerr << "mtx size:" << 3 * mtx_size * sizeof(int) / 1024 / 1024 / 1024 << "GB" << "\n";
+  if (para->verbose >= 2) std::cerr << "mtx size:" << 3 * mtx_size * sizeof(int) / 1024 / 1024 / 1024 << "GB" << "\n";
   if (mpool != nullptr) mpool->alloc_aligned(&buff, SIMDTotalBytes, 3 * mtx_size * sizeof(int));
   else alloc_aligned(&buff, SIMDTotalBytes, 3 * mtx_size * sizeof(int)); // malloc
   std::vector<int*> M(n), D(n), I(n);
@@ -1620,10 +1620,10 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   int ans = M[i][calj(acj, Bs[i])];
   int j = calj(acj, Bs[i]);
   int op = ALL_OP;
-  if (para->verbose) std::cerr << "band mode:" << ab_band << "\n";
-  if (para->verbose) std::cerr << "score:" << M[i][j] << "\n";
+  if (para->verbose >= 2) std::cerr << "band mode:" << ab_band << "\n";
+  if (para->verbose >= 2) std::cerr << "score:" << M[i][j] << "\n";
   total_part1 += std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
-  if (para->verbose) std::cerr << "used time: " << total_part1.count() / 1000 << " ms\n";
+  if (para->verbose >= 2) std::cerr << "used time: " << total_part1.count() / 1000 << " ms\n";
   while (i > 0 || acj > 0) {
     // dsource
     j = calj(acj, Bs[i]);
@@ -1805,7 +1805,7 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
   // para->enable_seeding
   if (!DAG->is_topsorted) DAG->topsort(para, 0);
 
-  if (para->verbose) std::cerr << "collect_anchors_bycons" << "\n";
+  if (para->verbose >= 2) std::cerr << "collect_anchors_bycons" << "\n";
   mm128_v anchors = mm->collect_anchors_bytseq(para, rid, qseq, qlen, mm->seqs_size, DAG->cons.c_str(), DAG->cons.size()); // tseq is cons
   // no chain
   bool ab_band = 1;
@@ -1816,7 +1816,7 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
   if (para->thread <= 1) {
     int beg_id = 0, beg_qpos = 0, end_id = -1, end_tpos = -1, end_qpos = -1;
     int j = 0;
-    if (para->verbose) std::cerr << "subgraph poa" << "\n";
+    if (para->verbose >= 2) std::cerr << "subgraph poa" << "\n";
     for (int i = 0; i < anchors.n; i++) {
       uint64_t xi = anchors.a[i].x, yi = anchors.a[i].y;
       int q_span = yi >> 32 & 0xff;

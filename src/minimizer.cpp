@@ -507,10 +507,10 @@ int minimizer_t::dp_chaining(const para_t* para, mm128_v* anchors, int tlen, int
   float chn_pen_gap = 0.01 * para->k, chn_pen_skip = 0.0 * 0.01 * para->k;
   int n_lchains;
   mm128_t* lchains;
-  if (para->verbose) std::cerr << "initial anchor size:" << anchors->n << "\n";
+  if (para->verbose >= 2) std::cerr << "initial anchor size:" << anchors->n << "\n";
   anchors->a = mg_lchain_dp(max_dis, max_dis, max_bw, max_skip_anchors, max_non_best_anchors, min_local_chain_cnt, min_local_chain_score, chn_pen_gap, chn_pen_skip, 0, 1, &anchors->n, anchors->a, &n_lchains, &lchains, km);
-  if (para->verbose) std::cerr << "after mg_lchain_dp anchor size:" << anchors->n << "\n";
-  if (para->verbose) std::cerr << "after mg_lchain_dp lchains number:" << n_lchains << "\n";
+  if (para->verbose >= 2) std::cerr << "after mg_lchain_dp anchor size:" << anchors->n << "\n";
+  if (para->verbose >= 2) std::cerr << "after mg_lchain_dp lchains number:" << n_lchains << "\n";
   // sort a by tpos
   // get a complete chain
   radix_sort_mm128x(lchains, lchains + n_lchains);
@@ -538,14 +538,14 @@ int minimizer_t::dp_chaining(const para_t* para, mm128_v* anchors, int tlen, int
   // find bug
 
   chain_dp(km, lchains, n_lchains, anchors, min_w, tlen, qlen, max_dis, max_dis, max_bw, chn_pen_gap, chn_pen_skip, 0, 1);
-  if (para->verbose) std::cerr << "after chain_dp anchor size:" << anchors->n << "\n";
+  if (para->verbose >= 2) std::cerr << "after chain_dp anchor size:" << anchors->n << "\n";
   kfree(km, lchains);
   return 0;
 }
 
 mm128_v minimizer_t::collect_anchors_bytseq(const para_t* para, int qid, const char* qseq, int qlen, int tid, const char* tseq, int tlen) {
   // collect cons 's minimizer
-  if (para->verbose) std::cerr << "collect tseq and qseq's minimizer" << "\n";
+  if (para->verbose >= 2) std::cerr << "collect tseq and qseq's minimizer" << "\n";
   int n = seqs_size; // cons 's rid
   tmm_v.n = 0;
   if (para->m <= 5) mm_sketch(km, tseq, tlen, para->mm_w, para->k, n, 0, &tmm_v);
@@ -579,7 +579,7 @@ mm128_v minimizer_t::collect_anchors_bytseq(const para_t* para, int qid, const c
   mm128_v anchors = { 0, 0, 0 };
   collect_anchors(&anchors, qlen);
 
-  if (para->verbose) std::cerr << "get a optimal chain through dp" << "\n";
+  if (para->verbose >= 2) std::cerr << "get a optimal chain through dp" << "\n";
   dp_chaining(para, &anchors, tlen, qlen);
   // if (para->verbose) {
   //   std::cerr << tlen << "\n";
