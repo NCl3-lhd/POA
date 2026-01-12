@@ -3,6 +3,7 @@
 #include <numeric>
 #include "cxxopts.hpp"
 #include "minipoa.h"
+#include <omp.h>
 // #include "kband.h"
 
 // extern unsigned char nt4_table[256];
@@ -24,7 +25,7 @@ int main(int argc, char** argv) {
     ("f,band_f", "band arg", cxxopts::value<int>()->default_value("40"))
     ("B,ab_band", "adpative band arg", cxxopts::value<bool>()->default_value("false"))
     ("S,seeding", "enable minimizer-based seeding and anchoring", cxxopts::value<bool>()->default_value("false"))
-    ("W,poa_w", "the minimum distance between adjacent anchors", cxxopts::value<int>()->default_value("10000"))
+    ("W,poa_w", "the minimum distance between adjacent anchors", cxxopts::value<int>()->default_value("20000"))
     ("k,k_mer", "k_mer lenth", cxxopts::value<int>()->default_value("19")) //19
     ("w,mm_w", "k_mer_window lenth", cxxopts::value<int>()->default_value("10"))
     ("s,sample_num", "sample_num", cxxopts::value<int>()->default_value("50"))
@@ -107,6 +108,7 @@ int main(int argc, char** argv) {
   int rid;
   if (para->verbose) std::cerr << "poa" << "\n";
   aligned_buff_t* mpool = new aligned_buff_t[para->thread];
+  omp_set_num_threads(para->thread);
   for (int i = exist_seq_num; i < seqs.size(); i++) {  //seqs.size()
     rid = ord[i];
     if (para->verbose && i % 10 == 0) {
