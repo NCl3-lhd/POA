@@ -78,6 +78,8 @@ int main(int argc, char** argv) {
     std::cerr << "error parsing options: " << e.what() << std::endl;
     return 1;
   }
+
+  // handle para
   initPara(para);
 
   // handle input

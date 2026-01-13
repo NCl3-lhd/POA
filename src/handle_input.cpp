@@ -57,6 +57,7 @@ void initPara(para_t* para) {
         para->mat[i * m + j] = i == j ? para->match : para->mismatch;
       }
     }
+    para->mat[(m - 1) * m + m - 1] = para->match;  
   }
   else { // 待支持 
 

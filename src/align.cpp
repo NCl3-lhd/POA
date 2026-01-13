@@ -1356,7 +1356,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
 
   const std::vector<node_t>& node = DAG->node;const std::vector<int>& rank = DAG->rank;
   int beg_i = node[beg_id].rank, end_i = node[end_id].rank;
-  int n = end_i - beg_i + 1, m = qlen + 1;
+  int n = end_i - beg_i + 1, m = qlen + 2;
   ab_band |= para->ab_band;
 
   std::string seq;
@@ -1364,13 +1364,15 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   for (int j = 0; j < qlen; j++) {
     seq += char26_table[qseq[j]];
   }
+  seq += char26_table[node[end_id].base];
+  int col_size = (m + 1 + reg_size - 1) / reg_size * reg_size;
+  seq.append(col_size - m, char26_table['N']);
   std::vector<res_t> res;
-  std::vector<int> mat = para->mat;
+
   int match = para->match, mismatch = para->mismatch, para_m = para->m, e1 = para->gap_ext1, o1 = para->gap_open1 + e1;
   reg MATCH = _mm256_set1_epi32(match), MISMATCH = _mm256_set1_epi32(mismatch), E1 = _mm256_set1_epi32(e1), O1 = _mm256_set1_epi32(o1), Neg_inf = _mm256_set1_epi32(NEG_INF);
   // std::cout << mat << " " << mis << " " << o1 << " " << e1 << "\n";
-  int col_size = (m + 1 + reg_size - 1) / reg_size * reg_size;
-  seq.append(col_size - m, char26_table['N']);
+
   std::vector<int> Ms(n, m + 1), Me(n); // index is rank  [Ms[i], Me[i]]
   std::vector<int> Bs(n), Be(n);  // index is rank    [Bs[i], Be[i] - 1)  Be[i] - 1 's block is Neg_inf is designed for M direciton dp
   std::vector<int> Mp(n), Sl(n), Pl(n, m), Pr(n), Ol(n), Or(n), Ow(n);  // index is rank
@@ -1420,7 +1422,9 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     // std::cerr << u << " " << lp[i] << " " << rp[i] << "\n";
   }
   // lp[node[0].rank] = 0; // src lp = 0
-  size_t sum = 0;
+
+  // para->m * m个int? para->mat
+  size_t p_size = para->m * col_size;
   for (int i = 0; i < n; i++) {
     // Ms[i] = 0, Me[i] = m;
     if (para->f > 0 && !ab_band) {
@@ -1435,12 +1439,22 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     mtx_size += offset;
     // sum += Me[i] - Ms[i] + 1;
   }
+  size_t sum = 0;
   void* buff = nullptr;
-  if (para->verbose >= 2) std::cerr << "mtx size:" << 3 * mtx_size * sizeof(int) / 1024 / 1024 / 1024 << "GB" << "\n";
-  if (mpool != nullptr) mpool->alloc_aligned(&buff, SIMDTotalBytes, 3 * mtx_size * sizeof(int));
-  else alloc_aligned(&buff, SIMDTotalBytes, 3 * mtx_size * sizeof(int)); // malloc
+  if (para->verbose >= 2) std::cerr << "mtx size:" << (p_size + 3 * mtx_size) * sizeof(int) / 1024 / 1024 / 1024 << "GB" << "\n";
+  if (mpool != nullptr) mpool->alloc_aligned(&buff, SIMDTotalBytes, (p_size + 3 * mtx_size) * sizeof(int));
+  else alloc_aligned(&buff, SIMDTotalBytes, (p_size + 3 * mtx_size) * sizeof(int)); // malloc
+
+  std::vector<int*> P(para->m);
+  for (int i = 0; i < para->m; i++) {
+    P[i] = (int*)buff + i * col_size;
+    for (int j = 0; j < col_size; j++) {
+      P[i][j] = para->mat[i * para->m + seq[j]];
+    }
+  }
+  // std::cerr << "ddl" << "\n";
   std::vector<int*> M(n), D(n), I(n);
-  M[0] = (int*)buff;
+  M[0] = (int*)buff + p_size;
   D[0] = M[0] + mtx_size;
   I[0] = D[0] + mtx_size;
 
@@ -1456,6 +1470,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     Ms[0] = std::max(0, std::min({ Pl[0], hlen[0] + Ol[0], m - tlen[0] }) - w), Me[0] = std::min(m, std::max({ Pr[0], hlen[0] + Or[0], m - tlen[0] }) + w);
     Bs[0] = Ms[0] / reg_size, Be[0] = Me[0] / reg_size + 2; // [block_s,block_e)
   }
+
+  // dp init
   for (int bid = Bs[0]; bid < Be[0]; bid++) {
     // memset(M, 0xc0, col_size * sizeof(int));//M[0] = NEG_INF
     // memset(D, 0xc0, col_size * sizeof(int));//D[0] = NEG_INF
@@ -1464,7 +1480,15 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     _mm256_store_si256((reg*)(M_i + bid * reg_size), Neg_inf);
     _mm256_store_si256((reg*)(D_i + bid * reg_size), Neg_inf);
   }
-  M[0][0] = 0;
+  M[0][0] = P[char26_table['N']][0];
+  I[0][0] = NEG_INF;
+  int block_num = Be[0] - Bs[0] - 1; // not contain Be[i] - 1 's block
+  for (int j = 1; j < block_num * reg_size; j++) { // block_num * reg_size
+    I[0][j] = std::max(I[0][j - 1] + e1, M[0][j - 1] + o1); // isource
+    M[0][j] = std::max({ M[0][j], D[0][j], I[0][j] });  // three source
+  }
+  _mm256_store_si256((reg*)(I[0] + block_num * reg_size), Neg_inf);
+
   int max = 0;
   int offset_band = 0;
   for (int i = 1; i < n; i++) {
@@ -1488,7 +1512,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       Bs[i] = Ms[i] / reg_size, Be[i] = Me[i] / reg_size + 2; // [block_s,block_e)
     }
     // std::cerr << Bs[i] << " " << Be[i] << "\n";
-    int block_num = Be[i] - Bs[i] - 1; // not contain Be[i] - 1 's block
+    block_num = Be[i] - Bs[i] - 1; // not contain Be[i] - 1 's block
     sum += Me[i] - Ms[i] + 1;
     int pre_num = 0;
     for (int k = 0; k < cur.in.size(); k++) {
@@ -1496,6 +1520,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       int p = pre.rank - beg_i; // rank
       if (p < 0 || hlen[p] == NEG_INF) continue;
       reg PRE_BASE = _mm256_set1_epi32(p == 0 ? char26_table['N'] : pre.base);
+
       int prev = NEG_INF;
       char prech = char26_table['N'];
       int* M_p = M[p];
@@ -1510,20 +1535,20 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         int pj = calj(acj, Bs[p]);
 
         if (!((std::max(0, acBid - 1) < Bs[p]) || (acBid > Be[p] - 2))) { //Bs[pre.rank] <= j - 1 && j <= Be[pre.rank]
-          if (acj == 0) { // 特殊处理 j=0 的情况
-            alignas(32) int tmp[8] = { prech,seq[0], seq[1], seq[2],seq[3], seq[4], seq[5], seq[6] };
-            SEQ = _mm256_load_si256((reg*)tmp);
-          }
-          else {  // 直接加载连续内存 (高效)
-            const __m128i seq_chunk = _mm_loadu_si128((const __m128i*)(seq.c_str() + acj - 1));
-            SEQ = _mm256_cvtepi8_epi32(seq_chunk);  // 符号扩展到32位
-          }
-          // M[i][j] = std::max(M[i][j], M[p][j - 1] + mat[pre.base * para_m + seq[j - 1]]); // qsource
+          // if (acj == 0) { // 特殊处理 j=0 的情况
+          //   alignas(32) int tmp[8] = { prech,seq[0], seq[1], seq[2],seq[3], seq[4], seq[5], seq[6] };
+          //   SEQ = _mm256_load_si256((reg*)tmp);
+          // }
+          // else {  // 直接加载连续内存 (高效)
+          //   const __m128i seq_chunk = _mm_loadu_si128((const __m128i*)(seq.c_str() + acj - 1));
+          //   SEQ = _mm256_cvtepi8_epi32(seq_chunk);  // 符号扩展到32位
+          // }
+          // M[i][j] = std::max(M[i][j], M[p][j - 1] + q[cur.base][j]); // qsource
           reg TMP = prev == NEG_INF ? _mm256_setr_epi32(prev, M_p[pj], M_p[pj + 1], M_p[pj + 2], M_p[pj + 3], M_p[pj + 4], M_p[pj + 5], M_p[pj + 6]) : _mm256_loadu_si256((reg*)(M_p + pj - 1)); //M[p][j - 1]
 
-          reg mask = _mm256_cmpeq_epi32(PRE_BASE, SEQ);
-          // pre.base == seq[j - 1] ? match : mismatch
-          TMP = _mm256_add_epi32(TMP, _mm256_blendv_epi8(MISMATCH, MATCH, mask));
+          // reg mask = _mm256_cmpeq_epi32(PRE_BASE, SEQ);
+          // // pre.base == seq[j - 1] ? match : mismatch
+          // TMP = _mm256_add_epi32(TMP, _mm256_blendv_epi8(MISMATCH, MATCH, mask));
           Mij = _mm256_max_epi32(Mij, TMP); //std::max(M[i][j], M[p][j - 1] + mat[pre.base * para_m + seq[j - 1]]); 
         }
         if (Bs[p] <= acBid && acBid < Be[p] - 1) { // Bs[pre.rank] <= j && j <= Be[pre.rank]
@@ -1545,6 +1570,15 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       for (int bid = 0; bid < block_num; bid++) {
         _mm256_store_si256((reg*)(M_i + bid * reg_size), Neg_inf);
         _mm256_store_si256((reg*)(D_i + bid * reg_size), Neg_inf);
+      }
+    }else {
+      for (int bid = 0; bid < block_num; bid++) { // SIMD
+        int j = bid * reg_size;
+        int acBid = (Bs[i] + bid);
+        int acj = acBid * reg_size;
+        reg Mij = _mm256_load_si256((reg*)(M_i + j));
+        Mij = _mm256_add_epi32(Mij, _mm256_load_si256((reg*)(P[cur.base] + acj)));
+        _mm256_store_si256((reg*)(M_i + j), Mij); 
       }
     }
     _mm256_store_si256((reg*)(M_i + block_num * reg_size), Neg_inf);
@@ -1614,7 +1648,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   }
   auto end1 = std::chrono::high_resolution_clock::now();
 
-  int i = n - 1, acj = m;
+  int i = n - 1, acj = m - 1;
   int ans = M[i][calj(acj, Bs[i])];
   int j = calj(acj, Bs[i]);
   int op = ALL_OP;
@@ -1631,38 +1665,38 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       std::cerr << acj << "\n";
       exit(0);
     }
+    const node_t& cur = node[rank[aci]];
+    int p_score = para->mat[cur.base * para->m +seq[acj]];
     if (op & M_OP && acj > 0) {  // M
-      const node_t& cur = node[rank[aci]];
       int bk = -1;
-      for (int k = 0; k < cur.in.size(); k++) {
-        const node_t& pre = node[cur.in[k]];
-        int p = pre.rank - beg_i; // rank
-        if (p < 0 || hlen[p] == NEG_INF) continue;
-        int pre_base = p == 0 ? char26_table['N'] : pre.base;
-        if (pre_base != seq[acj - 1]) continue;
-        // M
-        int pj = calj(acj, Bs[p]);
-        int block_num = Be[p] - Bs[p] - 1; // not contain Be[i] - 1 's block
-        if (pj - 1 >= 0 && pj - 1 < block_num * reg_size && M[i][j] == M[p][pj - 1] + (pre_base == seq[acj - 1] ? match : mismatch) && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
-          bk = k;
-          // break;
+      if (cur.base == seq[acj]) {
+        for (int k = 0; k < cur.in.size(); k++) {
+          const node_t& pre = node[cur.in[k]];
+          int p = pre.rank - beg_i; // rank
+          if (p < 0 || hlen[p] == NEG_INF) continue;
+          // M
+          int pj = calj(acj, Bs[p]);
+          int block_num = Be[p] - Bs[p] - 1; // not contain Be[i] - 1 's block
+          if (pj - 1 >= 0 && pj - 1 < block_num * reg_size && M[i][j] == M[p][pj - 1] + p_score && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
+            bk = k;
+            // break;
+          }
         }
       }
       if (bk != -1 && cur.in_weight[bk] >= cur.ind / 10) {  // backtrack based on the normal sample
         const node_t& pre = node[cur.in[bk]];
         int p = pre.rank - beg_i; // rank
-        int pre_base = p == 0 ? char26_table['N'] : pre.base;
-        if (pre_base == seq[acj - 1]) {
+        if (cur.base == seq[acj]) {
           // std::cout << "M";
-          res.emplace_back(res_t(pre.id, pre.base));
+          res.emplace_back(res_t(cur.id, cur.base));
         }
         else {
           // std::cout << "X";
-          const node_t& par = node[pre.par_id]; // dsu.find par
-          if (par.aligned_node[seq[acj - 1]] != -1) {
-            res.emplace_back(res_t(par.aligned_node[seq[acj - 1]], seq[acj - 1]));
+          const node_t& par = node[cur.par_id]; // dsu.find par
+          if (par.aligned_node[seq[acj]] != -1) {
+            res.emplace_back(res_t(par.aligned_node[seq[acj]], seq[acj]));
           }
-          else res.emplace_back(res_t(-1, seq[acj - 1], pre.par_id));
+          else res.emplace_back(res_t(-1, seq[acj], cur.par_id));
         }
         op = ALL_OP;
         i = p, acj--;
@@ -1681,6 +1715,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
           if (p < 0 || hlen[p] == NEG_INF) continue;
           if (Bs[p] <= acj / reg_size && acj / reg_size < Be[p] - 1) {
             int pj = calj(acj, Bs[p]);
+            // std::cerr << D[i][j] << " " << M[p][pj] << " " << o1 << "\n";
             if (D[i][j] == M[p][pj] + o1 && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
               bk = k;
               bop = M_OP | I_OP;
@@ -1712,18 +1747,17 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       }
     }
     if (op & I_OP && acj > 0) {
-      const node_t& cur = node[rank[aci]];
       if (j - 1 >= 0) {
         if (op == I_OP || M[i][j] == I[i][j]) {
           // std::cerr << "I";
           if (I[i][j] == M[i][j - 1] + o1) {
-            res.emplace_back(res_t(-1, seq[acj - 1]));
+            res.emplace_back(res_t(-1, seq[acj]));
             op = M_OP | D_OP;
             acj--;
             continue;
           }
           if (I[i][j] == I[i][j - 1] + e1) {
-            res.emplace_back(res_t(-1, seq[acj - 1]));
+            res.emplace_back(res_t(-1, seq[acj]));
             op = I_OP;
             acj--;
             continue;
@@ -1738,46 +1772,49 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         const node_t& pre = node[cur.in[k]];
         int p = pre.rank - beg_i; // rank
         if (p < 0 || hlen[p] == NEG_INF) continue;
-        int pre_base = p == 0 ? char26_table['N'] : pre.base;
         // if (pre.base != seq[acj - 1]) continue;
         // M
         int pj = calj(acj, Bs[p]);
         // if (M[i][j] == 17586 && pj - 1 >= 0)
         //   std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
         int block_num = Be[p] - Bs[p] - 1; // not contain Be[i] - 1 's block
-        if (pj - 1 >= 0 && pj - 1 < block_num * reg_size && M[i][j] == M[p][pj - 1] + (pre_base == seq[acj - 1] ? match : mismatch) && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
+        if (pj - 1 >= 0 && pj - 1 < block_num * reg_size && M[i][j] == M[p][pj - 1] + p_score && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
           bk = k;
           // break;
         }
       }
       if (bk != -1) {
         // std::cerr << "M";
-        op = ALL_OP;
         const node_t& pre = node[cur.in[bk]];
         int p = pre.rank - beg_i; // rank
-        int pre_base = p == 0 ? char26_table['N'] : pre.base;
-        if (pre_base == seq[acj - 1]) {
+        if (cur.base == seq[acj]) {
           // std::cout << "M";
-          res.emplace_back(res_t(pre.id, pre.base));
+          res.emplace_back(res_t(cur.id, cur.base));
         }
         else {
           // std::cout << "X";
-          const node_t& par = node[pre.par_id]; // dsu.find par
-          if (par.aligned_node[seq[acj - 1]] != -1) {
-            res.emplace_back(res_t(par.aligned_node[seq[acj - 1]], seq[acj - 1]));
+          const node_t& par = node[cur.par_id]; // dsu.find par
+          if (par.aligned_node[seq[acj]] != -1) {
+            res.emplace_back(res_t(par.aligned_node[seq[acj]], seq[acj]));
           }
-          else res.emplace_back(res_t(-1, seq[acj - 1], pre.par_id));
+          else res.emplace_back(res_t(-1, seq[acj], cur.par_id));
         }
+        op = ALL_OP;
         i = p, acj--;
         continue;
       }
     }
+    // std::cerr << n << " "<< m << " " << beg_id << " " << end_id << "\n";
+    // std::cerr << M[i][j] << " " << D[i][j] << " " << I[i][j] << " "<< op << "\n";
+    // std::cerr << aci << " " << acj << "\n";
     std::cerr << " backtrack error" << "\n";
     exit(1);
 
   }
+  res.emplace_back(res_t(beg_id, node[beg_id].base));
   if (mpool == nullptr) free_aligned(buff);
-  std::reverse(res.begin(), res.end());
+  std::reverse(res.begin(), res.end()); //[,)
+  res.pop_back();
   return res;
 }
 // #define sort_key_mm128x(a) ((a).x)
@@ -1842,7 +1879,7 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
     int n = anchors.n;
     std::vector<std::vector<res_t>> res_v;
     res_v.resize(n + 1);
-    #pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(static)
     for (int i = 0; i < n + 1; i++) {
       int tid = omp_get_thread_num();
       int beg_id, end_id, start_qpos, qlen, q_span = para->k, end_qpos;
