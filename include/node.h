@@ -23,7 +23,7 @@ struct node_t {
   void add_in_adj(int seq_id, int from, int curPos) { // seq_id == ord
     int ok = 0;
     ind++;
-    for (int i = 0; i < in.size(); i++) {
+    for (size_t i = 0; i < in.size(); i++) {
       if (from == in[i]) {
         in_weight[i]++;
         ok = 1;
@@ -42,7 +42,7 @@ struct node_t {
   }
   void add_out_adj(int seq_id, int to) {
     int ok = 0;
-    for (int i = 0; i < out.size(); i++) {
+    for (size_t i = 0; i < out.size(); i++) {
       if (to == out[i]) {
         out_weight[i]++;
         ok = 1;
@@ -60,7 +60,7 @@ struct node_t {
 
   }
   int getPos(int ord) const {
-    int idx = std::lower_bound(ids.begin(), ids.end(), ord) - ids.begin();
+    size_t idx = std::lower_bound(ids.begin(), ids.end(), ord) - ids.begin();
     return idp[idx];
     if (idx < ids.size() && ids[idx] == ord) return idp[idx];
     return -1; // INF

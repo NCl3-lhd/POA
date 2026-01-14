@@ -10,9 +10,13 @@
 
 2. make
    ```bash
-   cd minipoa
-   cmake -S . -B build
-   cmake --build build
+   cd minipoa && mkdir build && cd build
+   # AVX2(default)
+   cmake -DENABLE_AVX2=ON -DENABLE_AVX512=OFF -DENABLE_SSE2=OFF .. && make
+   # AVX512
+   cmake -DENABLE_AVX512=ON -DENABLE_AVX2=OFF -DENABLE_SSE2=OFF .. && make
+   # SSE2
+   cmake -DENABLE_SSE2=ON -DENABLE_AVX2=OFF -DENABLE_AVX512=OFF .. && make
    ```
 
 3. run
@@ -25,7 +29,7 @@
 
 4. clean
    ```bash
-   cmake --build build --target clean
+   make clean
    ```
 
 ## License

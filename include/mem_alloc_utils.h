@@ -21,7 +21,7 @@ struct aligned_buff_t {
     free_aligned(buff);
   }
   void alloc_aligned(void** mem_ptr, size_t alignment, size_t size) {
-    int ret;
+    // int ret;
     if (buff == nullptr) {
       buff_size = buff_size >= size * 2 ? buff_size : size * 2;
       ::alloc_aligned(&buff, alignment, buff_size);

@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
     ("h,help", "Print usage")
     ;
   options.parse_positional({ "input" });
-  int thread, sample_num;
+  int sample_num;
   std::string path;
   para_t* para = new para_t();
   try {
@@ -111,7 +111,7 @@ int main(int argc, char** argv) {
   if (para->verbose) std::cerr << "poa" << "\n";
   aligned_buff_t* mpool = new aligned_buff_t[para->thread];
   omp_set_num_threads(para->thread);
-  for (int i = exist_seq_num; i < seqs.size(); i++) {  //seqs.size()
+  for (size_t i = exist_seq_num; i < seqs.size(); i++) {  //seqs.size()
     rid = ord[i];
     if (para->verbose && i % 10 == 0) {
       std::cerr << "[" << i << "/" << seqs.size() << "]" << "\n";

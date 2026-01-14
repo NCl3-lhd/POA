@@ -12,6 +12,39 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # 禁用编译器特定的扩展，只使用标准C++
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# 设置默认构建类型为Release（自动包含-O3）
+# 放在project()之后，任何目标定义之前
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+# ============================================================
+# SIMD options (user selectable)
+# ============================================================
+
+option(ENABLE_AVX512 "Enable AVX-512 backend" OFF)
+option(ENABLE_AVX2   "Enable AVX2 backend"   ON)
+option(ENABLE_SSE2   "Enable SSE2 backend"   OFF)
+
+if (ENABLE_AVX512)
+    message(STATUS "SIMD backend: AVX-512")
+    add_compile_options(-mavx512f -mavx512bw)
+    add_compile_definitions(ENABLE_AVX512)
+
+elseif (ENABLE_AVX2)
+    message(STATUS "SIMD backend: AVX2")
+    add_compile_options(-mavx2)
+    add_compile_definitions(ENABLE_AVX2)
+
+elseif (ENABLE_SSE2)
+    message(STATUS "SIMD backend: SSE4.1")
+    add_compile_options(-msse4.1)
+    add_compile_definitions(ENABLE_SSE2)
+
+else()
+    message(FATAL_ERROR "No SIMD backend selected")
+endif()
+
 include(GNUInstallDirs)
 
 # 设置静态库输出目录为项目二进制目录下的lib文件夹
@@ -22,7 +55,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
 # # SIMD
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
 
 # 设置C++编译标志：启用所有警告和额外警告，遵循严格的ISO标准
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic")
@@ -92,8 +125,3 @@ install(EXPORT ${PROJECT_NAME}Targets
     FILE ${PROJECT_NAME}Targets.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
 
-# 设置默认构建类型为Release（自动包含-O3）
-# 放在project()之后，任何目标定义之前
-# if(NOT CMAKE_BUILD_TYPE)
-#   set(CMAKE_BUILD_TYPE Release)
-# endif()
