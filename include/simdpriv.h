@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SIMDPRIV_H
+#define SIMDPRIV_H
 #include <immintrin.h>
 #include <cstddef>
 
@@ -128,3 +129,4 @@ inline simd_reg simd_set_prev_and_load(int prev, const int* p) {
   );
 #endif
 }
+#endif
