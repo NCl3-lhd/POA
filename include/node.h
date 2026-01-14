@@ -9,9 +9,8 @@ struct node_t {
   int ind; // in_degree
   std::vector<int> in, in_weight, out, out_weight;
   std::vector<int> aligned_node;
-  std::vector<int> ids; // restore the ord[rid]
-  std::vector<int> idp; // restore the ord[rid] pos 
-  std::vector<int> idpos;
+  std::vector<int> ids; // restore the ord[rid]  msa
+  // std::vector<int> idp; // restore the ord[rid] pos  
   node_t();
   node_t(int _id, unsigned char _base, int m) {
     base = _base;
@@ -37,7 +36,7 @@ struct node_t {
     if (ids.empty() || ids.back() != seq_id) {
       // std::cerr << seq_id << " " << (int)base << " " << base << " " << curPos << "\n";
       ids.emplace_back(seq_id);
-      idp.emplace_back(curPos);
+      // idp.emplace_back(curPos);
     }
   }
   void add_out_adj(int seq_id, int to) {
@@ -59,12 +58,12 @@ struct node_t {
     }
 
   }
-  int getPos(int ord) const {
-    size_t idx = std::lower_bound(ids.begin(), ids.end(), ord) - ids.begin();
-    return idp[idx];
-    if (idx < ids.size() && ids[idx] == ord) return idp[idx];
-    return -1; // INF
-  }
+  // int getPos(int ord) const {
+  //   size_t idx = std::lower_bound(ids.begin(), ids.end(), ord) - ids.begin();
+  //   return idp[idx];
+  //   if (idx < ids.size() && ids[idx] == ord) return idp[idx];
+  //   return -1; // INF
+  // }
 };
 // std::vector<sequence> readFile(const char* path);
 #endif

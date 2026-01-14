@@ -367,7 +367,7 @@ void graph::output_gfa(const std::vector<int>& rid_to_ord, const std::vector<seq
   int i, j, cur_id, pre_id, out_id;
   for (i = 0; i < node.size(); ++i) deg[i] = node[i].in.size();
   std::vector<std::vector<int>> read_paths(seqs.size());
-  for (i = 0; i < n_seq; ++i) read_paths[i].resize(seqs[rid_to_ord[i]].seq.size());  // i is ord
+  // for (i = 0; i < n_seq; ++i) read_paths[i].resize(seqs[rid_to_ord[i]].seq.size());  // i is ord
 
   // output comment and header
   std::cout << "H\tVN:Z:1.0" << "\n";
@@ -397,8 +397,9 @@ void graph::output_gfa(const std::vector<int>& rid_to_ord, const std::vector<seq
         // add node id to read path
         for (int j = 0; j < node[cur_id].ids.size(); j++) {
           int id = node[cur_id].ids[j];
-          int idp = node[cur_id].idp[j];
-          read_paths[id][idp] = cur_id - 1;
+          // int idp = node[cur_id].idp[j];
+          read_paths[id].emplace_back(cur_id - 1);
+          // read_paths[id][idp] = cur_id - 1;
         }
       }
       for (i = 0; i < node[cur_id].out.size(); ++i) {
