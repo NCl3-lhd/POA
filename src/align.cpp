@@ -1364,7 +1364,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   for (int j = 0; j < qlen; j++) {
     seq += char26_table[qseq[j]];
   }
-  seq += char26_table[node[end_id].base];
+  seq += char26_table['N'];
   int col_size = (m + 1 + reg_size - 1) / reg_size * reg_size;
   seq.append(col_size - m, char26_table['N']);
   std::vector<res_t> res;
@@ -1577,7 +1577,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         int acBid = (Bs[i] + bid);
         int acj = acBid * reg_size;
         reg Mij = _mm256_load_si256((reg*)(M_i + j));
-        Mij = _mm256_add_epi32(Mij, _mm256_load_si256((reg*)(P[cur.base] + acj)));
+        int cur_base = i != n - 1 ? cur.base : char26_table['N'];
+        Mij = _mm256_add_epi32(Mij, _mm256_load_si256((reg*)(P[cur_base] + acj)));
         _mm256_store_si256((reg*)(M_i + j), Mij); 
       }
     }
@@ -1651,7 +1652,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   int i = n - 1, acj = m - 1;
   int ans = M[i][calj(acj, Bs[i])];
   int j = calj(acj, Bs[i]);
-  int op = ALL_OP;
+  int op = M_OP;
   if (para->verbose >= 2) std::cerr << "band mode:" << ab_band << "\n";
   if (para->verbose >= 2) std::cerr << "score:" << M[i][j] << "\n";
   total_part1 += std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
@@ -1666,10 +1667,11 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       exit(0);
     }
     const node_t& cur = node[rank[aci]];
-    int p_score = para->mat[cur.base * para->m +seq[acj]];
+    int cur_base = i != n - 1 ? cur.base : char26_table['N'];
+    int p_score = para->mat[cur_base * para->m + seq[acj]];
     if (op & M_OP && acj > 0) {  // M
       int bk = -1;
-      if (cur.base == seq[acj]) {
+      if (cur_base == seq[acj]) {
         for (int k = 0; k < cur.in.size(); k++) {
           const node_t& pre = node[cur.in[k]];
           int p = pre.rank - beg_i; // rank
@@ -1686,7 +1688,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       if (bk != -1 && cur.in_weight[bk] >= cur.ind / 10) {  // backtrack based on the normal sample
         const node_t& pre = node[cur.in[bk]];
         int p = pre.rank - beg_i; // rank
-        if (cur.base == seq[acj]) {
+        if (cur_base == seq[acj]) {
           // std::cout << "M";
           res.emplace_back(res_t(cur.id, cur.base));
         }
@@ -1787,7 +1789,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         // std::cerr << "M";
         const node_t& pre = node[cur.in[bk]];
         int p = pre.rank - beg_i; // rank
-        if (cur.base == seq[acj]) {
+        if (cur_base == seq[acj]) {
           // std::cout << "M";
           res.emplace_back(res_t(cur.id, cur.base));
         }
