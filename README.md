@@ -1,15 +1,16 @@
-# minimap
-> A respository for minipoa project
-
+# Minipoa: A minimizer-based method for fast and memory-efficient partial order alignment
 ## How to use?
 
-1. git clone this repository
-   ```bash
-   git clone https://github.com/NCl3-lhd/minipoa.git
-   ```
+1. Install
 
-2. make
+   Install via conda
    ```bash
+   conda install -c malab minipoa
+   ```
+   Or, make from source
+   ```bash
+   # Git clone this repository
+   git clone https://github.com/NCl3-lhd/minipoa.git
    cd minipoa && mkdir build && cd build
    # AVX2(default)
    cmake -DENABLE_AVX2=ON -DENABLE_AVX512=OFF -DENABLE_SSE2=OFF .. && make
@@ -19,18 +20,18 @@
    cmake -DENABLE_SSE2=ON -DENABLE_AVX2=OFF -DENABLE_AVX512=OFF .. && make
    ```
 
-3. run
+2. General usage
    ```bash
-   # consensus calling
-   ./bin/minipoa ./data/mtDNA.fasta > mtDNA.cons
-   # multiple sequence alignment
-   ./bin/minipoa ./data/mtDNA.fasta -S -t 12 -r1 > mtDNA.msa
+   # Sequencing mode for consensus calling
+   minipoa input.fasta > output.fasta
+   # MSA mode for multiple sequence alignment
+   minipoa input.fasta -S -r1 > output.fasta
+   # Generate graph information in GFA format
+   minipoa input.fasta -S -r2 > output.gfa
+   # Show help message
+   minipoa -h
    ```
 
-4. clean
-   ```bash
-   make clean
-   ```
 
 ## License
 

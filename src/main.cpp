@@ -10,12 +10,12 @@
 int main(int argc, char** argv) {
 
   // handle arg
-  cxxopts::Options options("POA", "A multiple sequence alignment tool");
+  cxxopts::Options options("minipoa", "A minimizer-based method for fast and memory-efficient partial order alignment\nExamples:\n  Sequencing mode for consensus calling:\tminipoa input.fasta > output.fasta\n  MSA mode for multiple sequence alignment:\tminipoa input.fasta -S -r1 > output.fasta\n  Generate graph information in GFA format:\tminipoa input.fasta -S -r2 > output.gfa");
 
   options.add_options()
     ("input", "input path", cxxopts::value<std::string>())
-    ("i,inc_fp", "incrementally align sequences to an existing graph/MSA", cxxopts::value<std::string>())
-    ("m,mat_fp", "match file path", cxxopts::value<std::string>())
+    ("i,inc_fp", "incrementally align sequences to an existing graph", cxxopts::value<std::string>())
+    ("m,mat_fp", "match file path (Undeveloped)", cxxopts::value<std::string>())
     ("M,match", "match sorce", cxxopts::value<int>()->default_value("2"))
     ("X,mismatch", "mismatch sorce", cxxopts::value<int>()->default_value("-4"))
     ("O,gap_open", "gap_open sorce", cxxopts::value<int>()->default_value("-4"))
@@ -33,6 +33,7 @@ int main(int argc, char** argv) {
     ("r,result", "result format (0-2). 0: consensus, 1: rc-msa, 2: gfa", cxxopts::value<int>()->default_value("0"))
     ("V,verbose", "verbose level (0-2). 0: none, 1: information, 2: debug [0]\n", cxxopts::value<int>()->default_value("0"))
     ("h,help", "Print usage")
+    ("v,version", "Print version")
     ;
   options.parse_positional({ "input" });
   int sample_num;
@@ -44,6 +45,14 @@ int main(int argc, char** argv) {
     {
       std::cout << options.help() << std::endl;
       return 0;
+    }
+    if (result.count("version")) {
+      std::cout << "minipoa version 1.0" << std::endl;
+      return 0;
+    }
+    if (result.count("input") == 0) {
+      std::cout << options.help() << std::endl;
+      return 1;
     }
     if (result.count("input"))
       path = result["input"].as<std::string>();
@@ -76,6 +85,7 @@ int main(int argc, char** argv) {
   catch (const cxxopts::exceptions::exception& e)
   {
     std::cerr << "error parsing options: " << e.what() << std::endl;
+    std::cout << options.help() << std::endl;
     return 1;
   }
 
