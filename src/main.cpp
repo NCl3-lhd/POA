@@ -90,13 +90,14 @@ int main(int argc, char** argv) {
 
   int exist_seq_num = seqs.size();
   try {
-    if (!path.empty()) readFile(seqs, path.c_str());
+    if (!path.empty()) readFile(para, seqs, path.c_str());
     // std::cerr << exist_seq_num << " " << seqs.size() << " " << DAG->node.size() << "\n";
   }
   catch (const std::exception& e) {
     std::cerr << "error read file: " << e.what() << std::endl;
     return 1;
   }
+  if(para->isRNA) char256_table[3] = 'U';
 
   if (para->verbose && para->enable_seeding) std::cerr << "collect minimizer" << "\n";
   minimizer_t* mm = new minimizer_t(para, seqs);

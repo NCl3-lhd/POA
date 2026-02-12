@@ -13,6 +13,7 @@ struct para_t {
   bool enable_seeding;
   int bw, poa_w;
   bool progressive_poa;
+  bool isRNA;
   int result; // result format 0 consensus,1 rc-msa 2 gfa
   int verbose;  //verbose level (0-2). 0: none, 1: information, 2: debug
   std::string  inc_fp;

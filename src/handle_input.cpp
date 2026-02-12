@@ -10,7 +10,7 @@
 KSEQ_INIT(gzFile, gzread)
 
 // handle input file
-void readFile(std::vector<seq_t>& seqs, const char* path) {
+void readFile(para_t* para, std::vector<seq_t>& seqs, const char* path) {
   //handle read file
   gzFile fp; // 文件指针
   kseq_t* seq; // 序列结构体
@@ -32,6 +32,9 @@ void readFile(std::vector<seq_t>& seqs, const char* path) {
     tseq.name = seq->name.s;
     if (seq->comment.l) tseq.comment = seq->comment.s;// 序列注释
     tseq.seq = seq->seq.s;
+    for (int i = 0; i < tseq.seq.size(); i++) {
+      para->isRNA |= (tseq.seq[i] | 32) == 'u';
+    }
     if (seq->qual.l)  tseq.qual = seq->qual.s;  // 质量分数
     seqs.emplace_back(tseq);
   }
@@ -57,7 +60,7 @@ void initPara(para_t* para) {
         para->mat[i * m + j] = i == j ? para->match : para->mismatch;
       }
     }
-    para->mat[(m - 1) * m + m - 1] = para->match;  
+    para->mat[(m - 1) * m + m - 1] = para->match;
   }
   else { // 待支持 
 
