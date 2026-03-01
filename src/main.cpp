@@ -10,7 +10,7 @@
 int main(int argc, char** argv) {
 
   // handle arg
-  cxxopts::Options options("minipoa", "A minimizer-based method for fast and memory-efficient partial order alignment\nExamples:\n  Sequencing mode for consensus calling:\tminipoa input.fasta > output.fasta\n  MSA mode for multiple sequence alignment:\tminipoa input.fasta -S -r1 > output.fasta\n  Generate graph information in GFA format:\tminipoa input.fasta -S -r2 > output.gfa");
+  cxxopts::Options options("minipoa", "A minimizer-based method for fast and memory-efficient partial order alignment\nExamples:\n  Sequencing mode for consensus calling:\tminipoa input.fasta > output.fasta\n  MSA mode for multiple sequence alignment:\tminipoa input.fasta -S -r1 -t thread > output.fasta\n  Generate graph information in GFA format:\tminipoa input.fasta -S -r2 -t thread > output.gfa");
 
   options.add_options()
     ("input", "input path", cxxopts::value<std::string>())
@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
     ("t,thread", "thread number", cxxopts::value<int>()->default_value("1"))
     ("b,band_b", "band arg", cxxopts::value<int>()->default_value("100"))
     ("f,band_f", "band arg", cxxopts::value<int>()->default_value("40"))
-    ("B,ab_band", "adpative band arg", cxxopts::value<bool>()->default_value("false"))
+    ("B,ab_band", "enable adpative band strategy", cxxopts::value<bool>()->default_value("false"))
     ("S,seeding", "enable minimizer-based seeding and anchoring", cxxopts::value<bool>()->default_value("false"))
     ("W,poa_w", "the minimum distance between adjacent anchors", cxxopts::value<int>()->default_value("20000"))
     ("k,k_mer", "k_mer lenth", cxxopts::value<int>()->default_value("19")) //19
