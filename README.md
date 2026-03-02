@@ -79,7 +79,7 @@ minipoa input.fasta -B > output.fasta
 The band length is automatically calculated based on the specified parameters and the query sequence length using the formula: `len = b + 1 / f * query_length`.
 ```bash
 # Narrow the bandwidth under adaptive band strategy
-minipoa input.fasta -B -b 10 -f 10 > output.fasta
+minipoa input.fasta -B -b 10 -f 100 > output.fasta
 ```
 `f = 0` : If you explicitly set `f = 0`, minipoa will not apply any banding strategy and will perform full dynamic programming across the entire matrix.
 
