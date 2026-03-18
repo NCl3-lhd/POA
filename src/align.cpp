@@ -237,12 +237,12 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         simd_store(D_i + bid * simd_width, Neg_inf);
       }
     }else {
+      int cur_base = i != n - 1 ? cur.base : char26_table['N'];
       for (int bid = 0; bid < block_num; bid++) { // SIMD
         int j = bid * simd_width;
         int acBid = (Bs[i] + bid);
         int acj = acBid * simd_width;
         simd_reg Mij = simd_load(M_i + j);
-        int cur_base = i != n - 1 ? cur.base : char26_table['N'];
         Mij = simd_add(Mij, simd_load(P[cur_base] + acj));
         simd_store(M_i + j, Mij);
       }
