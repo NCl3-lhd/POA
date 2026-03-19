@@ -39,7 +39,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   // std::cout << mat << " " << mis << " " << o1 << " " << e1 << "\n";
 
   std::vector<int> Ms(n, m + 1), Me(n); // index is rank  [Ms[i], Me[i]]
-  std::vector<int> Bs(n), Be(n);  // index is rank    [Bs[i], Be[i] - 1)  Be[i] - 1 's block is Neg_inf is designed for M direciton dp
+  std::vector<int> Bs(n), Be(n);  // index is rank    [Bs[i], Be[i]) 
   std::vector<int> Mp(n), Sl(n), Pl(n, m), Pr(n), Ol(n), Or(n), Ow(n);  // index is rank
   size_t mtx_size = 0;
   int w = para->b;
@@ -98,7 +98,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     else {
       Ms[i] = 0, Me[i] = m;
     }
-    Bs[i] = Ms[i] / simd_width, Be[i] = Me[i] / simd_width + 2; // [block_s,block_e)
+    Bs[i] = Ms[i] / simd_width, Be[i] = Me[i] / simd_width + 1; // [block_s,block_e)
     int offset = (Be[i] - Bs[i]) * simd_width;
     if (hlen[i] == NEG_INF || tlen[i] == NEG_INF) offset = 0;
     mtx_size += offset;
@@ -133,7 +133,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   if (para->f > 0 && ab_band) {
     // Ms[i] = std::max(0, std::min(DAG->hlen[aci] - DAG->hlen[beg_i], m + DAG->tlen[aci] - DAG->tlen[end_i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[aci] - DAG->hlen[beg_i], m + DAG->tlen[aci] - DAG->tlen[end_i]) + w);
     Ms[0] = std::max(0, std::min({ Pl[0], hlen[0] + Ol[0], m - tlen[0] }) - w), Me[0] = std::min(m, std::max({ Pr[0], hlen[0] + Or[0], m - tlen[0] }) + w);
-    Bs[0] = Ms[0] / simd_width, Be[0] = Me[0] / simd_width + 2; // [block_s,block_e)
+    Bs[0] = Ms[0] / simd_width, Be[0] = Me[0] / simd_width + 1; // [block_s,block_e)
   }
 
   // dp init
@@ -147,7 +147,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   }
   M[0][0] = P[char26_table['N']][0];
   I[0][0] = NEG_INF;
-  int block_num = Be[0] - Bs[0] - 1; // not contain Be[i] - 1 's block
+  int block_num = Be[0] - Bs[0]; // not contain Be[i] - 1 's block
   for (int j = 1; j < block_num * simd_width; j++) { // block_num * reg_size
     I[0][j] = std::max(I[0][j - 1] + e1, M[0][j - 1] + o1); // isource
     M[0][j] = std::max({ M[0][j], D[0][j], I[0][j] });  // three source
@@ -177,7 +177,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       Bs[i] = Ms[i] / simd_width, Be[i] = Me[i] / simd_width + 2; // [block_s,block_e)
     }
     // std::cerr << Bs[i] << " " << Be[i] << "\n";
-    block_num = Be[i] - Bs[i] - 1; // not contain Be[i] - 1 's block
+    block_num = Be[i] - Bs[i]; // not contain Be[i] - 1 's block
     sum += Me[i] - Ms[i] + 1;
     int pre_num = 0;
     for (size_t k = 0; k < cur.in.size(); k++) {
@@ -186,7 +186,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       if (p < 0 || hlen[p] == NEG_INF) continue;
       // reg PRE_BASE = _mm256_set1_epi32(p == 0 ? char26_table['N'] : pre.base);
 
-      int prev = NEG_INF;
+      // int prev = NEG_INF;
       // char prech = char26_table['N'];
       int* M_p = M[p];
       int* D_p = D[p];
@@ -199,7 +199,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         // reg SEQ; // seq[j - 1]
         int pj = calj(acj, Bs[p]);
 
-        if (pj >= 0 && acBid < Be[p] - 1) { //Bs[pre.rank] <= j - 1 && j <= Be[pre.rank]
+        if (pj >= 0 && acBid < Be[p]) { //Bs[pre.rank] <= j - 1 && j <= Be[pre.rank]
           // if (acj == 0) { // 特殊处理 j=0 的情况
           //   alignas(32) int tmp[8] = { prech,seq[0], seq[1], seq[2],seq[3], seq[4], seq[5], seq[6] };
           //   SEQ = _mm256_load_si256((reg*)tmp);
@@ -315,8 +315,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   auto end1 = std::chrono::high_resolution_clock::now();
 
   int i = n - 1, acj = m - 1;
-  // int ans = M[i][calj(acj, Bs[i])];
   int j = calj(acj, Bs[i]);
+  int ans = M[i][j];
   int op = M_OP;
   if (para->verbose >= 2) std::cerr << "band mode:" << ab_band << "\n";
   if (para->verbose >= 2) std::cerr << "score:" << M[i][j] << "\n";
@@ -326,8 +326,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     // dsource
     j = calj(acj, Bs[i]);
     int aci = beg_i + i;
-    if (acj > (Be[i] - 1) * simd_width || acj < Bs[i] * simd_width) {
-      std::cerr << "l:" << Bs[i] * simd_width << " " << "r:" << (Be[i] - 1) * simd_width << "\n";
+    if (acj >= Be[i] * simd_width || acj < Bs[i] * simd_width) {
+      std::cerr << "l:" << Bs[i] * simd_width << " " << "r:" << Be[i] * simd_width << "\n";
       std::cerr << acj << "\n";
       exit(0);
     }
@@ -343,8 +343,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
           if (p < 0 || hlen[p] == NEG_INF) continue;
           // M
           int pj = calj(acj, Bs[p]);
-          int block_num = Be[p] - Bs[p] - 1; // not contain Be[i] - 1 's block
-          if (pj - 1 >= 0 && pj - 1 < block_num * simd_width && M[i][j] == M[p][pj - 1] + p_score && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
+          int block_num = Be[p] - Bs[p]; // not contain Be[i] - 1 's block
+          if (pj - 1 >= 0 && pj - 1 < block_num * simd_width < Be[p] && M[i][j] == M[p][pj - 1] + p_score && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
             bk = k;
             // break;
           }
@@ -381,7 +381,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
           int p = pre.rank - beg_i; // rank
           if (p < 0 || hlen[p] == NEG_INF) continue;
           int pj = calj(acj, Bs[p]);
-          if (pj >= 0 && acj / simd_width < Be[p] - 1) {
+          if (pj >= 0 && acj / simd_width < Be[p]) {
             // std::cerr << D[i][j] << " " << M[p][pj] << " " << o1 << "\n";
             if (D[i][j] == M[p][pj] + o1 && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
               bk = k;
@@ -396,7 +396,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
             int p = pre.rank - beg_i; // rank
             if (p < 0 || hlen[p] == NEG_INF) continue;
             int pj = calj(acj, Bs[p]);
-            if (pj >= 0 && acj / simd_width < Be[p] - 1) {
+            if (pj >= 0 && acj / simd_width < Be[p]) {
               if (D[i][j] == D[p][pj] + e1 && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
                 bk = k;
                 bop = D_OP;
@@ -444,7 +444,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         int pj = calj(acj, Bs[p]);
         // if (M[i][j] == 17586 && pj - 1 >= 0)
         //   std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
-        int block_num = Be[p] - Bs[p] - 1; // not contain Be[i] - 1 's block
+        int block_num = Be[p] - Bs[p]; // not contain Be[i] - 1 's block
         if (pj - 1 >= 0 && pj - 1 < block_num * simd_width && M[i][j] == M[p][pj - 1] + p_score && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
           bk = k;
           // break;
@@ -472,9 +472,10 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       }
     }
     // std::cerr << n << " "<< m << " " << beg_id << " " << end_id << "\n";
-    // std::cerr << M[i][j] << " " << D[i][j] << " " << I[i][j] << " "<< op << "\n";
     // std::cerr << aci << " " << acj << "\n";
     std::cerr << " backtrack error" << "\n";
+    std::cerr << ans << "\n";
+    std::cerr << M[i][j] << " " << D[i][j] << " " << I[i][j] << " "<< op << "\n";
     exit(1);
 
   }
