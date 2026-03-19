@@ -142,17 +142,18 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     // memset(D, 0xc0, col_size * sizeof(int));//D[0] = NEG_INF
     int* M_i = M[0];
     int* D_i = D[0];
+    int* I_i = I[0];
     simd_store(M_i + bid * simd_width, Neg_inf);
     simd_store(D_i + bid * simd_width, Neg_inf);
+    simd_store(I_i + bid * simd_width, Neg_inf);
   }
   M[0][0] = P[char26_table['N']][0];
-  I[0][0] = NEG_INF;
-  int block_num = Be[0] - Bs[0]; // not contain Be[i] - 1 's block
-  for (int j = 1; j < block_num * simd_width; j++) { // block_num * reg_size
-    I[0][j] = std::max(I[0][j - 1] + e1, M[0][j - 1] + o1); // isource
-    M[0][j] = std::max({ M[0][j], D[0][j], I[0][j] });  // three source
-  }
-  simd_store(I[0] + block_num * simd_width, Neg_inf);
+  // int block_num = Be[0] - Bs[0]; // not contain Be[i] - 1 's block
+  // for (int j = 1; j < block_num * simd_width; j++) { // block_num * reg_size
+  //   I[0][j] = std::max(I[0][j - 1] + e1, M[0][j - 1] + o1); // isource
+  //   M[0][j] = std::max({ M[0][j], D[0][j], I[0][j] });  // three source
+  // }
+  // simd_store(I[0] + block_num * simd_width, Neg_inf);
 
   // int max = 0;
   // int offset_band = 0;
@@ -177,7 +178,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       Bs[i] = Ms[i] / simd_width, Be[i] = Me[i] / simd_width + 2; // [block_s,block_e)
     }
     // std::cerr << Bs[i] << " " << Be[i] << "\n";
-    block_num = Be[i] - Bs[i]; // not contain Be[i] - 1 's block
+    int block_num = Be[i] - Bs[i]; // not contain Be[i] - 1 's block
     sum += Me[i] - Ms[i] + 1;
     int pre_num = 0;
     for (size_t k = 0; k < cur.in.size(); k++) {
@@ -247,8 +248,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         simd_store(M_i + j, Mij);
       }
     }
-    simd_store(M_i + block_num * simd_width, Neg_inf);
-    simd_store(D_i + block_num * simd_width, Neg_inf);
+    // simd_store(M_i + block_num * simd_width, Neg_inf);
+    // simd_store(D_i + block_num * simd_width, Neg_inf);
     int* I_i = I[i];
     I_i[0] = NEG_INF;
     M_i[0] = std::max({ M_i[0], D_i[0], I_i[0] });
@@ -256,7 +257,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       I_i[j] = std::max(I_i[j - 1] + e1, M_i[j - 1] + o1); // isource
       M_i[j] = std::max({ M_i[j], D_i[j], I_i[j] });  // three source
     }
-    simd_store(I_i + block_num * simd_width, Neg_inf);
+    // simd_store(I_i + block_num * simd_width, Neg_inf);
 
     if (para->f > 0 && ab_band) {
       int max_j = 0;
@@ -438,12 +439,16 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       for (size_t k = 0; k < cur.in.size(); k++) {
         const node_t& pre = node[cur.in[k]];
         int p = pre.rank - beg_i; // rank
+        // if (ans == -2314 && M[i][j] == -18) {
+        //   std::cerr << i << " " << j << "\n";
+        //   std::cerr << k << " " << p << "\n";
+        // }
         if (p < 0 || hlen[p] == NEG_INF) continue;
         // if (pre.base != seq[acj - 1]) continue;
         // M
         int pj = calj(acj, Bs[p]);
-        // if (M[i][j] == 17586 && pj - 1 >= 0)
-        //   std::cerr << M[p][pj - 1] << " " << (pre.base == seq[acj - 1] ? match : mismatch) << "\n";
+        // if (ans == -2314 && M[i][j] == -18  && pj - 1 >= 0)
+        //   std::cerr << M[i][j] << " " << M[p][pj - 1] << " " << p_score << "\n";
         int block_num = Be[p] - Bs[p]; // not contain Be[i] - 1 's block
         if (pj - 1 >= 0 && pj - 1 < block_num * simd_width && M[i][j] == M[p][pj - 1] + p_score && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
           bk = k;
@@ -474,8 +479,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     // std::cerr << n << " "<< m << " " << beg_id << " " << end_id << "\n";
     // std::cerr << aci << " " << acj << "\n";
     std::cerr << " backtrack error" << "\n";
-    std::cerr << ans << "\n";
-    std::cerr << M[i][j] << " " << D[i][j] << " " << I[i][j] << " "<< op << "\n";
+    // std::cerr << ans << " " << i << " " << j << "\n";
+    // std::cerr << M[i][j] << " " << D[i][j] << " " << I[i][j] << " "<< op << "\n";
     exit(1);
 
   }
