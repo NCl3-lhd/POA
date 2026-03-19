@@ -199,7 +199,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         // reg SEQ; // seq[j - 1]
         int pj = calj(acj, Bs[p]);
 
-        if (!((std::max(0, acBid - 1) < Bs[p]) || (acBid > Be[p] - 2))) { //Bs[pre.rank] <= j - 1 && j <= Be[pre.rank]
+        if (pj >= 0 && acBid < Be[p] - 1) { //Bs[pre.rank] <= j - 1 && j <= Be[pre.rank]
           // if (acj == 0) { // 特殊处理 j=0 的情况
           //   alignas(32) int tmp[8] = { prech,seq[0], seq[1], seq[2],seq[3], seq[4], seq[5], seq[6] };
           //   SEQ = _mm256_load_si256((reg*)tmp);
@@ -209,23 +209,22 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
           //   SEQ = _mm256_cvtepi8_epi32(seq_chunk);  // 符号扩展到32位
           // }
           // M[i][j] = std::max(M[i][j], M[p][j - 1] + q[cur.base][j]); // qsource
-          simd_reg TMP = prev == NEG_INF ? simd_set_prev_and_load(prev, &M_p[pj]) : simd_loadu(M_p + pj - 1); //M[p][j - 1]
+          simd_reg TMP = pj == 0 ? simd_set_prev_and_load(NEG_INF, &M_p[pj]) : simd_loadu(M_p + pj - 1); //M[p][j - 1]
 
           // reg mask = _mm256_cmpeq_epi32(PRE_BASE, SEQ);
           // // pre.base == seq[j - 1] ? match : mismatch
           // TMP = _mm256_add_epi32(TMP, _mm256_blendv_epi8(MISMATCH, MATCH, mask));
           Mij = simd_max(Mij, TMP); //std::max(M[i][j], M[p][j - 1] + mat[pre.base * para_m + seq[j - 1]]); 
-        }
-        if (Bs[p] <= acBid && acBid < Be[p] - 1) { // Bs[pre.rank] <= j && j <= Be[pre.rank]
+
           // D[i][j] = std::max({ D[i][j], D[p][j] + e1, M[p][j] + o1 });    // dsource
-          simd_reg TMP = simd_load(D_p + pj);
+          TMP = simd_load(D_p + pj);
           Dij = simd_max(Dij, simd_add(TMP, E1)); // max(D[i][j], D[p][j] + e1)
           TMP = simd_load(M_p + pj);
           Dij = simd_max(Dij, simd_add(TMP, O1)); // max(D[i][j], M[p][j] + o1)
         }
         simd_store(M_i + j, Mij); // M[i][j] = max
         simd_store(D_i + j, Dij); // D[i][j] = max
-        prev = M_p[pj + simd_width - 1]; // pre = M[p][j +reg_size - 1]
+        // prev = M_p[pj + simd_width - 1]; // pre = M[p][j +reg_size - 1]
         // prech = seq[j + reg_size - 1];// prech =seq[j + reg_size - 1]
 
       }
@@ -236,7 +235,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         simd_store(M_i + bid * simd_width, Neg_inf);
         simd_store(D_i + bid * simd_width, Neg_inf);
       }
-    }else {
+    }
+    else {
       int cur_base = i != n - 1 ? cur.base : char26_table['N'];
       for (int bid = 0; bid < block_num; bid++) { // SIMD
         int j = bid * simd_width;
@@ -380,8 +380,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
           const node_t& pre = node[cur.in[k]];
           int p = pre.rank - beg_i; // rank
           if (p < 0 || hlen[p] == NEG_INF) continue;
-          if (Bs[p] <= acj / simd_width && acj / simd_width < Be[p] - 1) {
-            int pj = calj(acj, Bs[p]);
+          int pj = calj(acj, Bs[p]);
+          if (pj >= 0 && acj / simd_width < Be[p] - 1) {
             // std::cerr << D[i][j] << " " << M[p][pj] << " " << o1 << "\n";
             if (D[i][j] == M[p][pj] + o1 && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
               bk = k;
@@ -395,8 +395,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
             const node_t& pre = node[cur.in[k]];
             int p = pre.rank - beg_i; // rank
             if (p < 0 || hlen[p] == NEG_INF) continue;
-            if (Bs[p] <= acj / simd_width && acj / simd_width < Be[p] - 1) {
-              int pj = calj(acj, Bs[p]);
+            int pj = calj(acj, Bs[p]);
+            if (pj >= 0 && acj / simd_width < Be[p] - 1) {
               if (D[i][j] == D[p][pj] + e1 && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
                 bk = k;
                 bop = D_OP;
@@ -546,7 +546,7 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
     int n = anchors.n;
     std::vector<std::vector<res_t>> res_v;
     res_v.resize(n + 1);
-    #pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(static)
     for (int i = 0; i < n + 1; i++) {
       int tid = omp_get_thread_num();
       int beg_id, end_id, start_qpos, qlen, q_span = para->k, end_qpos;
