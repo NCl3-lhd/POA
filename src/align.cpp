@@ -142,17 +142,18 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     // memset(D, 0xc0, col_size * sizeof(int));//D[0] = NEG_INF
     int* M_i = M[0];
     int* D_i = D[0];
-    int* I_i = I[0];
+    // int* I_i = I[0];
     simd_store(M_i + bid * simd_width, Neg_inf);
     simd_store(D_i + bid * simd_width, Neg_inf);
-    simd_store(I_i + bid * simd_width, Neg_inf);
+    // simd_store(I_i + bid * simd_width, Neg_inf);
   }
   M[0][0] = P[char26_table['N']][0];
-  // int block_num = Be[0] - Bs[0]; // not contain Be[i] - 1 's block
-  // for (int j = 1; j < block_num * simd_width; j++) { // block_num * reg_size
-  //   I[0][j] = std::max(I[0][j - 1] + e1, M[0][j - 1] + o1); // isource
-  //   M[0][j] = std::max({ M[0][j], D[0][j], I[0][j] });  // three source
-  // }
+  int block_num = Be[0] - Bs[0]; // not contain Be[i] - 1 's block
+  I[0][0] = NEG_INF;
+  for (int j = 1; j < block_num * simd_width; j++) { // block_num * reg_size
+    I[0][j] = std::max(I[0][j - 1] + e1, M[0][j - 1] + o1); // isource
+    M[0][j] = std::max({ M[0][j], D[0][j], I[0][j] });  // three source
+  }
   // simd_store(I[0] + block_num * simd_width, Neg_inf);
 
   // int max = 0;
@@ -175,7 +176,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
 
       // Ms[i] = std::max(0, std::min({ Pl[i], DAG->hlen[i] + Ol[i], m - DAG->tlen[i] }) - w - Ow[i]), Me[i] = std::min(m, std::max({ Pr[i], DAG->hlen[i] + Or[i], m - DAG->tlen[i] }) + w + Ow[i]);
       Ms[i] = std::max(0, std::min({ Pl[i], hlen[i] + Ol[i], m - tlen[i] }) - w - Ow[i]), Me[i] = std::min(m, std::max({ Pr[i], hlen[i] + Or[i], m - tlen[i] }) + w + Ow[i]);
-      Bs[i] = Ms[i] / simd_width, Be[i] = Me[i] / simd_width + 2; // [block_s,block_e)
+      Bs[i] = Ms[i] / simd_width, Be[i] = Me[i] / simd_width + 1; // [block_s,block_e)
     }
     // std::cerr << Bs[i] << " " << Be[i] << "\n";
     int block_num = Be[i] - Bs[i]; // not contain Be[i] - 1 's block
@@ -317,7 +318,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
 
   int i = n - 1, acj = m - 1;
   int j = calj(acj, Bs[i]);
-  int ans = M[i][j];
+  // int ans = M[i][j];
   int op = M_OP;
   if (para->verbose >= 2) std::cerr << "band mode:" << ab_band << "\n";
   if (para->verbose >= 2) std::cerr << "score:" << M[i][j] << "\n";
