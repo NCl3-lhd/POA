@@ -120,20 +120,34 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     }
   }
   // std::cerr << "ddl" << "\n";
-  std::vector<int*> M(n), D(n), I(n);
-  M[0] = (int*)buff + p_size;
-  D[0] = M[0] + mtx_size + invisible_size;
-  I[0] = D[0] + mtx_size;
+  // std::vector<int*> M(n), D(n), I(n);
+  // M[0] = (int*)buff + p_size;
+  // D[0] = M[0] + mtx_size + invisible_size;
+  // I[0] = D[0] + mtx_size;
 
-  for (int i = 1; i < n; i++) {
-    int offset = (Be[i - 1] - Bs[i - 1]) * simd_width;
+  // for (int i = 1; i < n; i++) {
+  //   int offset = (Be[i - 1] - Bs[i - 1]) * simd_width;
+  //   int invisible_offset = 0;
+  //   if (hlen[i - 1] == NEG_INF || tlen[i - 1] == NEG_INF) offset = 0;
+  //   else invisible_offset = simd_width;
+  //   M[i] = M[i - 1] + offset + invisible_offset;
+  //   D[i] = D[i - 1] + offset;
+  //   I[i] = I[i - 1] + offset;
+  // }
+  std::vector<int*> M(n), D(n), I(n); // 同一个 i 的 M, D, I 紧挨着排列
+  int* current_ptr = (int*)buff + p_size; // 跳过 Profile(P) 矩阵占用的空间
+  for (int i = 0; i < n; i++) {
+    int offset = (Be[i] - Bs[i]) * simd_width;
     int invisible_offset = 0;
-    if (hlen[i - 1] == NEG_INF || tlen[i - 1] == NEG_INF) offset = 0;
+    if (hlen[i] == NEG_INF || tlen[i] == NEG_INF) offset = 0;
     else invisible_offset = simd_width;
-    M[i] = M[i - 1] + offset + invisible_offset;
-    D[i] = D[i - 1] + offset;
-    I[i] = I[i - 1] + offset;
+    M[i] = current_ptr;
+    // M 的末尾保留 invisible_offset，防止后续 simd_loadu(M_p + pj - 1) 越界读取
+    D[i] = M[i] + offset + invisible_offset;
+    I[i] = D[i] + offset;
+    current_ptr += (offset * 3) + invisible_offset;
   }
+
   if (para->f > 0 && ab_band) {
     // Ms[i] = std::max(0, std::min(DAG->hlen[aci] - DAG->hlen[beg_i], m + DAG->tlen[aci] - DAG->tlen[end_i]) - w), Me[i] = std::min(m, std::max(DAG->hlen[aci] - DAG->hlen[beg_i], m + DAG->tlen[aci] - DAG->tlen[end_i]) + w);
     Ms[0] = std::max(0, std::min({ Pl[0], hlen[0] + Ol[0], m - tlen[0] }) - w), Me[0] = std::min(m, std::max({ Pr[0], hlen[0] + Or[0], m - tlen[0] }) + w);
