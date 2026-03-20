@@ -231,7 +231,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
           //   SEQ = _mm256_cvtepi8_epi32(seq_chunk);  // 符号扩展到32位
           // }
           // M[i][j] = std::max(M[i][j], M[p][j - 1] + q[cur.base][j]); // qsource
-          simd_reg TMP = pj == 0 ? simd_set_prev_and_load(NEG_INF, &M_p[pj]) : simd_loadu(M_p + pj - 1); //M[p][j - 1]
+          simd_reg TMP = pj == 0 ? simd_set_prev_and_load(NEG_INF, M_p + pj) : simd_loadu(M_p + pj - 1); //M[p][j - 1]
 
           // reg mask = _mm256_cmpeq_epi32(PRE_BASE, SEQ);
           // // pre.base == seq[j - 1] ? match : mismatch
