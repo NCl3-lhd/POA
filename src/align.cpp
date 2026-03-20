@@ -90,6 +90,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
 
   // para->m * m个int? para->mat
   size_t p_size = para_m * col_size;
+  size_t invisible_size = 0;
   for (int i = 0; i < n; i++) {
     // Ms[i] = 0, Me[i] = m;
     if (para->f > 0 && !ab_band) {
@@ -101,14 +102,15 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     Bs[i] = Ms[i] / simd_width, Be[i] = Me[i] / simd_width + 1; // [block_s,block_e)
     int offset = (Be[i] - Bs[i]) * simd_width;
     if (hlen[i] == NEG_INF || tlen[i] == NEG_INF) offset = 0;
+    else invisible_size += simd_width;
     mtx_size += offset;
     // sum += Me[i] - Ms[i] + 1;
   }
   size_t sum = 0;
   void* buff = nullptr;
   if (para->verbose >= 2) std::cerr << "mtx size:" << (p_size + 3 * mtx_size) * sizeof(int) / 1024 / 1024 / 1024 << "GB" << "\n";
-  if (mpool != nullptr) mpool->alloc_aligned(&buff, SIMD_BYTES, (p_size + 3 * mtx_size) * sizeof(int));
-  else alloc_aligned(&buff, SIMD_BYTES, (p_size + 3 * mtx_size) * sizeof(int)); // malloc
+  if (mpool != nullptr) mpool->alloc_aligned(&buff, SIMD_BYTES, (p_size + 3 * mtx_size + invisible_size) * sizeof(int));
+  else alloc_aligned(&buff, SIMD_BYTES, (p_size + 3 * mtx_size + invisible_size) * sizeof(int)); // malloc
 
   std::vector<int*> P(para_m);
   for (int i = 0; i < para_m; i++) {
@@ -120,13 +122,15 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   // std::cerr << "ddl" << "\n";
   std::vector<int*> M(n), D(n), I(n);
   M[0] = (int*)buff + p_size;
-  D[0] = M[0] + mtx_size;
+  D[0] = M[0] + mtx_size + invisible_size;
   I[0] = D[0] + mtx_size;
 
   for (int i = 1; i < n; i++) {
     int offset = (Be[i - 1] - Bs[i - 1]) * simd_width;
+    int invisible_offset = 0;
     if (hlen[i - 1] == NEG_INF || tlen[i - 1] == NEG_INF) offset = 0;
-    M[i] = M[i - 1] + offset;
+    else invisible_offset = simd_width;
+    M[i] = M[i - 1] + offset + invisible_offset;
     D[i] = D[i - 1] + offset;
     I[i] = I[i - 1] + offset;
   }
@@ -137,22 +141,23 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   }
 
   // dp init
-  for (int bid = Bs[0]; bid < Be[0]; bid++) {
+  int block_num = Be[0] - Bs[0]; // not contain Be[i] - 1 's block1
+  int* M_i = M[0];
+  int* D_i = D[0];
+  int* I_i = I[0];
+  for (int bid = 0; bid < block_num; bid++) {
     // memset(M, 0xc0, col_size * sizeof(int));//M[0] = NEG_INF
     // memset(D, 0xc0, col_size * sizeof(int));//D[0] = NEG_INF
-    int* M_i = M[0];
-    int* D_i = D[0];
-    // int* I_i = I[0];
     simd_store(M_i + bid * simd_width, Neg_inf);
     simd_store(D_i + bid * simd_width, Neg_inf);
     // simd_store(I_i + bid * simd_width, Neg_inf);
   }
-  M[0][0] = P[char26_table['N']][0];
-  int block_num = Be[0] - Bs[0]; // not contain Be[i] - 1 's block
-  I[0][0] = NEG_INF;
+  simd_store(M_i + block_num * simd_width, Neg_inf);
+  M_i[0] = P[char26_table['N']][0];
+  I_i[0] = NEG_INF;
   for (int j = 1; j < block_num * simd_width; j++) { // block_num * reg_size
-    I[0][j] = std::max(I[0][j - 1] + e1, M[0][j - 1] + o1); // isource
-    M[0][j] = std::max({ M[0][j], D[0][j], I[0][j] });  // three source
+    I_i[j] = std::max(I_i[j - 1] + e1, M_i[j - 1] + o1); // isource
+    M_i[j] = std::max({ M_i[j], D_i[j], I_i[j] });  // three source
   }
   // simd_store(I[0] + block_num * simd_width, Neg_inf);
 
@@ -164,8 +169,9 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     const node_t& cur = node[rank[aci]];
     // std::cerr << aci << " " << cur.rank << " " << char256_table[cur.base] << "\n";
     if (hlen[i] == NEG_INF || tlen[i] == NEG_INF) continue;
-    int* M_i = M[i];
-    int* D_i = D[i];
+    M_i = M[i];
+    D_i = D[i];
+    I_i = I[i];
     if (para->f > 0 && ab_band) {  // adptive band
       // int pmid = (Pl[i] + Pr[i]) / 2;
       // int tms = std::min({ Pl[i], DAG->hlen[i] + Ol[i], m - DAG->tlen[i] }), tme = std::max({ Pr[i], DAG->hlen[i] + Or[i], m - DAG->tlen[i] });
@@ -249,9 +255,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         simd_store(M_i + j, Mij);
       }
     }
-    // simd_store(M_i + block_num * simd_width, Neg_inf);
+    simd_store(M_i + block_num * simd_width, Neg_inf);
     // simd_store(D_i + block_num * simd_width, Neg_inf);
-    int* I_i = I[i];
     I_i[0] = NEG_INF;
     M_i[0] = std::max({ M_i[0], D_i[0], I_i[0] });
     for (int j = 1; j < block_num * simd_width; j++) { // block_num * reg_size
@@ -346,7 +351,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
           // M
           int pj = calj(acj, Bs[p]);
           int block_num = Be[p] - Bs[p]; // not contain Be[i] - 1 's block
-          if (pj - 1 >= 0 && pj - 1 < block_num * simd_width < Be[p] && M[i][j] == M[p][pj - 1] + p_score && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
+          if (pj - 1 >= 0 && pj - 1 < block_num * simd_width && M[i][j] == M[p][pj - 1] + p_score && (bk == -1 || cur.in_weight[k] > cur.in_weight[bk])) {
             bk = k;
             // break;
           }
