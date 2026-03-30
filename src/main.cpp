@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
     para->ab_band = result["ab_band"].as<bool>();
     para->k = result["k_mer"].as<int>();
     para->mm_w = result["mm_w"].as<int>();
-    para->bw = 1000;
+    para->bw = 5000;
     para->progressive_poa = result["progressive_poa"].as<bool>();
     para->enable_seeding = result["seeding"].as<bool>();
     para->thread = result["thread"].as<int>();
@@ -97,7 +97,7 @@ int main(int argc, char** argv) {
   graph* DAG = new graph();
   DAG->init(para);
   if (!para->inc_fp.empty()) seqs = read_gfa(para, DAG, para->inc_fp.c_str());
-
+  
   int exist_seq_num = seqs.size();
   try {
     if (!path.empty()) readFile(para, seqs, path.c_str());

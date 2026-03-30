@@ -545,7 +545,7 @@ int minimizer_t::dp_chaining(const para_t* para, mm128_v* anchors, int tlen, int
 
 mm128_v minimizer_t::collect_anchors_bytseq(const para_t* para, int qid, const char* qseq, int qlen, int tid, const char* tseq, int tlen) {
   // collect cons 's minimizer
-  if (para->verbose >= 2) std::cerr << "collect tseq and qseq's minimizer" << "\n";
+  if (para->verbose >= 2) std::cerr << "collect tseq and "<< qid <<" qseq's minimizer" << "\n";
   int n = seqs_size; // cons 's rid
   tmm_v.n = 0;
   if (para->m <= 5) mm_sketch(km, tseq, tlen, para->mm_w, para->k, n, 0, &tmm_v);
@@ -578,7 +578,19 @@ mm128_v minimizer_t::collect_anchors_bytseq(const para_t* para, int qid, const c
   // if (para->verbose) std::cerr << "collect anchor between cons and qseq" << "\n";
   mm128_v anchors = { 0, 0, 0 };
   collect_anchors(&anchors, qlen);
+  // if (qid == 205) {
+  //   std::cerr << "target pos: ";
+  //   for (int i = 0; i < anchors.n; i++) {
+  //     std::cerr << (int)anchors.a[i].x << " ";
+  //   }
+  //   std::cerr << "\n";
 
+  //   std::cerr << "query pos: ";
+  //   for (int i = 0; i < anchors.n; i++) {
+  //     std::cerr << (int)anchors.a[i].y << " ";
+  //   }
+  //   std::cerr << "\n";
+  // }
   if (para->verbose >= 2) std::cerr << "get a optimal chain through dp" << "\n";
   dp_chaining(para, &anchors, tlen, qlen);
   // if (para->verbose) {

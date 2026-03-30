@@ -43,7 +43,7 @@ static inline int32_t comput_sc(const mm128_t* ai, const mm128_t* aj, int32_t ma
     return -INF;
   }
   dg = dr < dq ? dr : dq;
-  q_span = aj->y >> 32 & 0xff;
+  q_span = ai->y >> 32 & 0xff; // modify aj -> ai
   sc = q_span < dg ? q_span : dg;
   if (dd || dg > q_span) {
     float lin_pen, log_pen;
@@ -256,7 +256,7 @@ int get_local_chain_score(int end_tpos_j, int end_qpos_j, int start_anchor_i, in
     else r = mid;
   }
   if (r == end_anchor_i) return -INF;
-  return score[end_anchor_i - 1] - score[r];
+  return score[end_anchor_i - 1] - score[r] + (a[r].y >> 32 & 0xff);
 }
 
 /* modified from yangao07/abPOA/abpoa_seed.c */
