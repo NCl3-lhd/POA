@@ -247,7 +247,7 @@ mm128_t* mg_lchain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int 
 /************ end *************/
 
 
-int get_local_chain_score(int end_tpos_j, int end_qpos_j, int start_anchor_i, int end_anchor_i, mm128_t* a, int* score) {
+inline int get_local_chain_score(int end_tpos_j, int end_qpos_j, int start_anchor_i, int end_anchor_i, mm128_t* a, int* score) {
   int l = start_anchor_i, r = end_anchor_i;
   while (l + 1 < r) {
     int mid = (l + r) / 2;
@@ -256,7 +256,7 @@ int get_local_chain_score(int end_tpos_j, int end_qpos_j, int start_anchor_i, in
     else r = mid;
   }
   if (r == end_anchor_i) return -INF;
-  return score[end_anchor_i - 1] - score[r] + (a[r].y >> 32 & 0xff);
+  return score[end_anchor_i - 1] - score[r]; //  + (a[r].y >> 32 & 0xff)
 }
 
 /* modified from yangao07/abPOA/abpoa_seed.c */
