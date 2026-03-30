@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
     para->ab_band = result["ab_band"].as<bool>();
     para->k = result["k_mer"].as<int>();
     para->mm_w = result["mm_w"].as<int>();
-    para->bw = 5000;
+    para->bw = 1000;
     para->progressive_poa = result["progressive_poa"].as<bool>();
     para->enable_seeding = result["seeding"].as<bool>();
     para->thread = result["thread"].as<int>();
