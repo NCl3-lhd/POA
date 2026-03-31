@@ -562,7 +562,7 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
         }
       }
       beg_id = end_id;beg_qpos = j;
-      // ab_band = yi & MM_SEED_BAND_MODE_MASK;
+      ab_band = yi & MM_SEED_BAND_MODE_MASK;
     }
     int qlen = tseq.size() - beg_qpos;
     std::vector<res_t> t_res = poa(para, DAG, beg_id, 1, rid, tseq.c_str() + j, qlen, mpool, ab_band);
@@ -572,12 +572,13 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
     int n = anchors.n;
     std::vector<std::vector<res_t>> res_v;
     res_v.resize(n + 1);
-#pragma omp parallel for schedule(static)
+    #pragma omp parallel for schedule(static)
     for (int i = 0; i < n + 1; i++) {
       int tid = omp_get_thread_num();
       int beg_id, end_id, start_qpos, qlen, q_span = para->k, end_qpos;
       beg_id = i == 0 ? 0 : DAG->cons_pos_to_id[(int)anchors.a[i - 1].x];
       end_id = i == n ? 1 : DAG->cons_pos_to_id[(int)anchors.a[i].x - q_span + 1];
+      ab_band = i == 0 ? 1 : (anchors.a[i - 1].y & MM_SEED_BAND_MODE_MASK);
       end_qpos = i == n ? tseq.size() : (int)anchors.a[i].y - q_span + 1;
       start_qpos = i == 0 ? 0 : (int)anchors.a[i - 1].y + 1;
       qlen = end_qpos - start_qpos;

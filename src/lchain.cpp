@@ -248,7 +248,7 @@ mm128_t* mg_lchain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int 
 
 
 inline int get_local_chain_score(int end_tpos_j, int end_qpos_j, int start_anchor_i, int end_anchor_i, mm128_t* a, int* score) {
-  int l = start_anchor_i, r = end_anchor_i;
+  int l = start_anchor_i - 1, r = end_anchor_i;
   while (l + 1 < r) {
     int mid = (l + r) / 2;
     int tpos_mid = (uint32_t)a[mid].x, qpos_mid = (uint32_t)a[mid].y;
@@ -256,7 +256,7 @@ inline int get_local_chain_score(int end_tpos_j, int end_qpos_j, int start_ancho
     else r = mid;
   }
   if (r == end_anchor_i) return -INF;
-  return score[end_anchor_i - 1] - score[r]; //  + (a[r].y >> 32 & 0xff)
+  return score[end_anchor_i - 1] - score[r] + ((a[r].y >> 32) & 0xff); //  + (a[r].y >> 32 & 0xff)
 }
 
 /* modified from yangao07/abPOA/abpoa_seed.c */
@@ -313,6 +313,9 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
     }
   }
   if (global_max_i < 0) {
+    kfree(km, f);
+    kfree(km, chain_score);
+    kfree(km, pre_chain);
     return 0;
   }
   mm128_v anchors = { 0, 0, 0 };
@@ -329,17 +332,20 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
 
     while (i >= 0) {
       int cur_tpos = a[i].x, cur_qpos = (int32_t)a[i].y;
-      
+
       if (cur_tpos > pre_end_tpos && cur_qpos > pre_end_qpos) {
-        if (last_tpos - cur_tpos >= min_w && last_qpos - cur_qpos >= min_w) {
-          if (filter_num < min_w / 10) {  // add flag
+        filter_num++;
+        int dt = last_tpos - cur_tpos, dq = last_qpos - cur_qpos;
+        if (dt >= min_w && dq >= min_w) {
+          int dg = dt < dq ? dq - dt : dt - dq;
+          // std::cerr << filter_num << " " << std::max(dt, dq) / 40 << " " << 6 * (100 + dq / 40) << " " << std::min(dt, dq) << "\n";
+          if (filter_num < std::max(dt, dq) / 40 || 6 * (100 + dq / 40) < std::min(dt, dq)) {  // add flag
             a[i].y |= MM_SEED_BAND_MODE_MASK;// [cur_tpos, last_tpos] reg can used static band
           }
           filter_num = 0;
           kv_push(mm128_t, km, anchors, a[i]);
           last_tpos = cur_tpos, last_qpos = cur_qpos;
         }
-        else filter_num++;
       }
       else break;
       i--;
@@ -352,15 +358,18 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
   // pre_end_tpos = (pre_x >> 32) & 0x7fffffff, pre_end_qpos = (int32_t)pre_x;
   while (i >= 0) {
     int cur_tpos = a[i].x, cur_qpos = (int32_t)a[i].y;
-    if (last_tpos - cur_tpos >= min_w && last_qpos - cur_qpos >= min_w) {
-      if (filter_num < min_w / 10) {  // add flag
+    filter_num++;
+    int dt = last_tpos - cur_tpos, dq = last_qpos - cur_qpos;
+    if (dt >= min_w && dq >= min_w) {
+      int dg = dt < dq ? dq - dt : dt - dq;
+      // std::cerr << filter_num << " " << std::max(dt, dq) / 40 << " " << 6 * (100 + dq / 40) << " " << std::min(dt, dq) << "\n";
+      if (filter_num < std::max(dt, dq) / 40 || 6 * (100 + dq / 40) < std::min(dt, dq)) {  // add flag
         a[i].y |= MM_SEED_BAND_MODE_MASK;
       }
       filter_num = 0;
       kv_push(mm128_t, km, anchors, a[i]);
       last_tpos = cur_tpos, last_qpos = cur_qpos;
     }
-    else filter_num++;
     if (i == (cur_y >> 32)) break;
     i--;
   }
