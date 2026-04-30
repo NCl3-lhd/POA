@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
       return 0;
     }
     if (result.count("version")) {
-      std::cout << "minipoa version 1.3" << std::endl;
+      std::cout << "minipoa version 1.4" << std::endl;
       return 0;
     }
     if (result.count("input") == 0) {
