@@ -287,10 +287,10 @@ std::vector<res_t> poa(const para_t *para, const graph *DAG, int beg_id, int end
     // simd_store(I_i + block_num * simd_width, Neg_inf);
 
     if (para->f > 0 && ab_band) {
-      int max_j = 0;
-      for (int j = 1; j < block_num *simd_width; j++) { // block_num * reg_size
-        max_j = M_i[j] > M_i[max_j] ? j : max_j;
-      }
+      int max_j = simd_argmax(M_i, block_num);
+      // for (int j = 1; j < block_num *simd_width; j++) { // block_num * reg_size
+      //   max_j = M_i[j] > M_i[max_j] ? j : max_j;
+      // }
       int max_acj = Bs[i] * simd_width + max_j, max_slp = 0;
       bool isMatch = false;
       Mp[i] = max_acj;
