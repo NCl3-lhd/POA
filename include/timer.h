@@ -33,7 +33,7 @@ public:
     if (records_.empty()) return;
     std::cerr << "\n=== Timer ===\n";
     std::vector<std::pair<std::string, Record>> sorted(records_.begin(), records_.end());
-    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) {
+    std::sort(sorted.begin(), sorted.end(), [](const std::pair<std::string, Record> &a, const std::pair<std::string, Record> &b) {
       return total(b.second) > total(a.second);
     });
     double grand = 0;

@@ -5,7 +5,7 @@
 #include "minipoa.h"
 #include <omp.h>
 // #include "kband.h"
-
+// #include "timer.h"
 // extern unsigned char nt4_table[256];
 int main(int argc, char** argv) {
   // handle arg
@@ -133,12 +133,13 @@ int main(int argc, char** argv) {
     if (para->verbose >= 2) std::cerr << "topsort" << "\n";
     DAG->topsort(para, i + 1 == seqs.size());
   }
-
+  // Timer::instance().start("output");
   if (para->verbose) std::cerr << "out_put" << "\n";
   if (para->result == 0) DAG->output_consensus();
   else if (para->result == 1) DAG->output_rc_msa(para, mm->rid_to_ord, seqs);
   else if (para->result == 2) DAG->output_gfa(mm->rid_to_ord, seqs);
-
+  // Timer::instance().stop("output");
+  // Timer::instance().print();
   // delete
   delete[] mpool;
   mpool = nullptr;  // 防止后续误用

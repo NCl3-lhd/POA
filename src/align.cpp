@@ -5,7 +5,7 @@
 #include <cstring>
 #include <chrono>
 #include <omp.h>
-
+// #include "timer.h"
 
 constexpr int INF = 0x3f3f3f3f; // 0x3f3f3f3f
 constexpr int NEG_INF = 0xc0c0c0c0; // 0xc0c0c0c0
@@ -16,6 +16,8 @@ inline int calj(int acj, int Bs) {
 }
 
 std::vector<res_t> poa(const para_t *para, const graph *DAG, int beg_id, int end_id, int qid, const char *qseq, int qlen, aligned_buff_t *mpool, bool ab_band) {
+
+  // Timer::instance().start("init");
   std::chrono::microseconds total_part1(0);
   auto start1 = std::chrono::high_resolution_clock::now();
 
@@ -178,6 +180,7 @@ std::vector<res_t> poa(const para_t *para, const graph *DAG, int beg_id, int end
 
   // int max = 0;
   // int offset_band = 0;
+  // Timer::instance().stop("init");
   for (int i = 1; i < n; i++) {
     // std::cerr << i << " " << n << "\n";
     int aci = beg_i + i;
@@ -203,14 +206,12 @@ std::vector<res_t> poa(const para_t *para, const graph *DAG, int beg_id, int end
     int block_num = Be[i] - Bs[i]; // not contain Be[i] - 1 's block
     sum += Me[i] - Ms[i] + 1;
     int pre_num = 0;
+    // Timer::instance().start("MD");
     for (size_t k = 0; k < cur.in.size(); k++) {
       const node_t &pre = node[cur.in[k]];
       int p = pre.rank - beg_i; // rank
       if (p < 0 || hlen[p] == NEG_INF) continue;
-      // reg PRE_BASE = _mm256_set1_epi32(p == 0 ? char26_table['N'] : pre.base);
 
-      // int prev = NEG_INF;
-      // char prech = char26_table['N'];
       int *M_p = M[p];
       int *D_p = D[p];
       for (int bid = 0; bid < block_num; bid++) { // SIMD
@@ -219,40 +220,25 @@ std::vector<res_t> poa(const para_t *para, const graph *DAG, int beg_id, int end
         int acj = acBid * simd_width;
         simd_reg Mij = pre_num == 0 ? Neg_inf : simd_load(M_i + j);
         simd_reg Dij = pre_num == 0 ? Neg_inf : simd_load(D_i + j);
-        // reg SEQ; // seq[j - 1]
         int pj = calj(acj, Bs[p]);
 
-        if (pj >= 0 && acBid < Be[p]) { //Bs[pre.rank] <= j - 1 && j <= Be[pre.rank]
-          // if (acj == 0) { // 特殊处理 j=0 的情况
-          //   alignas(32) int tmp[8] = { prech,seq[0], seq[1], seq[2],seq[3], seq[4], seq[5], seq[6] };
-          //   SEQ = _mm256_load_si256((reg*)tmp);
-          // }
-          // else {  // 直接加载连续内存 (高效)
-          //   const __m128i seq_chunk = _mm_loadu_si128((const __m128i*)(seq.c_str() + acj - 1));
-          //   SEQ = _mm256_cvtepi8_epi32(seq_chunk);  // 符号扩展到32位
-          // }
-          // M[i][j] = std::max(M[i][j], M[p][j - 1] + q[cur.base][j]); // qsource
-          simd_reg TMP = simd_loadu(M_p + pj - 1); //M[p][j - 1]
+        if (pj >= 0 && acBid < Be[p]) {
+          simd_reg TMP = simd_loadu(M_p + pj - 1);
+          Mij = simd_max(Mij, TMP);
 
-          // reg mask = _mm256_cmpeq_epi32(PRE_BASE, SEQ);
-          // // pre.base == seq[j - 1] ? match : mismatch
-          // TMP = _mm256_add_epi32(TMP, _mm256_blendv_epi8(MISMATCH, MATCH, mask));
-          Mij = simd_max(Mij, TMP); //std::max(M[i][j], M[p][j - 1] + mat[pre.base * para_m + seq[j - 1]]); 
-
-          // D[i][j] = std::max({ D[i][j], D[p][j] + e1, M[p][j] + o1 });    // dsource
           TMP = simd_load(D_p + pj);
-          Dij = simd_max(Dij, simd_add(TMP, E1)); // max(D[i][j], D[p][j] + e1)
-          TMP = simd_load(M_p + pj);
-          Dij = simd_max(Dij, simd_add(TMP, O1)); // max(D[i][j], M[p][j] + o1)
-        }
-        simd_store(M_i + j, Mij); // M[i][j] = max
-        simd_store(D_i + j, Dij); // D[i][j] = max
-        // prev = M_p[pj + simd_width - 1]; // pre = M[p][j +reg_size - 1]
-        // prech = seq[j + reg_size - 1];// prech =seq[j + reg_size - 1]
+          Dij = simd_max(Dij, simd_add(TMP, E1));
 
+          TMP = simd_load(M_p + pj);
+          Dij = simd_max(Dij, simd_add(TMP, O1));
+        }
+        simd_store(M_i + j, Mij);
+        simd_store(D_i + j, Dij);
       }
       pre_num++;
     }
+    // Timer::instance().stop("MD");
+
     if (pre_num == 0) {
       for (int bid = 0; bid < block_num; bid++) {
         simd_store(M_i + bid * simd_width, Neg_inf);
@@ -260,34 +246,63 @@ std::vector<res_t> poa(const para_t *para, const graph *DAG, int beg_id, int end
       }
     }
     else {
+      // Timer::instance().start("Profile_I_Fusion");
       int cur_base = i != n - 1 ? cur.base : char26_table['N'];
-      for (int bid = 0; bid < block_num; bid++) { // SIMD
+      I_i[0] = NEG_INF;
+
+      for (int bid = 0; bid < block_num; bid++) {
         int j = bid * simd_width;
         int acBid = (Bs[i] + bid);
         int acj = acBid * simd_width;
+
+        // 1. 批量加载刚才 MD 循环算好的 M_i 和 D_i
         simd_reg Mij = simd_load(M_i + j);
+        simd_reg Dij = simd_load(D_i + j);
+
         Mij = simd_add(Mij, simd_load(P[cur_base] + acj));
-        simd_store(M_i + j, Mij);
+
+        alignas(SIMD_BYTES) int m_arr[simd_width];
+        alignas(SIMD_BYTES) int d_arr[simd_width];
+        simd_store(m_arr, Mij);
+        simd_store(d_arr, Dij);
+
+        // 4. 无痛执行纯标量 I 循环 (完全在栈上跑，避开堆内存的 Store-Forwarding Stall)
+        for (int v = 0; v < simd_width; v++) {
+          int tj = j + v;
+          // if (tj == block_num * simd_width - 1) break; // 无需break, 因为I会用到 下一个 M的左padding,不会越界
+          int md = std::max(m_arr[v], d_arr[v]);
+          I_i[tj + 1] = std::max(I_i[tj] + e1, md + o1);
+          m_arr[v] = std::max(md, I_i[tj]);
+        }
+        simd_store(M_i + j, simd_load(m_arr));
       }
+      // Timer::instance().stop("Profile_I_Fusion");
     }
+
+    // --- 边界复原 ---
+
     simd_store(M_i - simd_width, Neg_inf);
     simd_store(M_i + block_num * simd_width, Neg_inf);
     // simd_store(D_i + block_num * simd_width, Neg_inf);
-    I_i[0] = NEG_INF;
-    // M_i[0] = std::max({ M_i[0], D_i[0], I_i[0] });
-    // for (int j = 1; j < block_num * simd_width; j++) { // block_num * reg_size
-    //   I_i[j] = std::max(I_i[j - 1] + e1, M_i[j - 1] + o1); // isource
-    //   M_i[j] = std::max({ M_i[j], D_i[j], I_i[j] });  // three source
+    // Timer::instance().stop("MD");
+    // Timer::instance().start("I");
+    // I_i[0] = NEG_INF;
+    // // M_i[0] = std::max({ M_i[0], D_i[0], I_i[0] });
+    // // for (int j = 1; j < block_num * simd_width; j++) { // block_num * reg_size
+    // //   I_i[j] = std::max(I_i[j - 1] + e1, M_i[j - 1] + o1); // isource
+    // //   M_i[j] = std::max({ M_i[j], D_i[j], I_i[j] });  // three source
+    // // }
+    // for (int j = 0; j < block_num * simd_width - 1; j++) { // block_num * reg_size
+    //   int md = std::max(M_i[j], D_i[j]);
+    //   I_i[j + 1] = std::max(I_i[j] + e1, md + o1); // isource
+    //   M_i[j] = std::max(md, I_i[j]);  // three source
     // }
-    for (int j = 0; j < block_num * simd_width - 1; j++) { // block_num * reg_size
-      int md = std::max(M_i[j], D_i[j]);
-      I_i[j + 1] = std::max(I_i[j] + e1, md + o1); // isource
-      M_i[j] = std::max(md, I_i[j]);  // three source
-    }
-    // simd_store(I_i + block_num * simd_width, Neg_inf);
-
+    // // simd_store(I_i + block_num * simd_width, Neg_inf);
+    // Timer::instance().stop("I");
     if (para->f > 0 && ab_band) {
+      // Timer::instance().start("argmax");
       int max_j = simd_argmax(M_i, block_num);
+      // Timer::instance().stop("argmax");
       // for (int j = 1; j < block_num *simd_width; j++) { // block_num * reg_size
       //   max_j = M_i[j] > M_i[max_j] ? j : max_j;
       // }
@@ -340,6 +355,8 @@ std::vector<res_t> poa(const para_t *para, const graph *DAG, int beg_id, int end
       }
     }
   }
+  // Timer::instance().start("traceback");
+
   auto end1 = std::chrono::high_resolution_clock::now();
 
   int i = n - 1, acj = m - 1;
@@ -515,6 +532,7 @@ std::vector<res_t> poa(const para_t *para, const graph *DAG, int beg_id, int end
   if (mpool == nullptr) free_aligned(buff);
   std::reverse(res.begin(), res.end()); //[,)
   res.pop_back();
+  // Timer::instance().stop("traceback");
   return res;
 }
 // #define sort_key_mm128x(a) ((a).x)
