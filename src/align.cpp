@@ -102,7 +102,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     Bs[i] = Ms[i] / simd_width, Be[i] = Me[i] / simd_width + 1; // [block_s,block_e)
     int offset = (Be[i] - Bs[i]) * simd_width;
     if (hlen[i] == NEG_INF || tlen[i] == NEG_INF) offset = 0;
-    else invisible_size += simd_width;
+    else invisible_size += 2 * simd_width;
     mtx_size += offset;
     // sum += Me[i] - Ms[i] + 1;
   }
@@ -140,10 +140,10 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     int offset = (Be[i] - Bs[i]) * simd_width;
     int invisible_offset = 0;
     if (hlen[i] == NEG_INF || tlen[i] == NEG_INF) offset = 0;
-    else invisible_offset = simd_width;
-    M[i] = current_ptr;
+    else invisible_offset = 2 * simd_width;
+    M[i] = current_ptr + simd_width;
     // M 的末尾保留 invisible_offset，防止后续 simd_loadu(M_p + pj - 1) 越界读取
-    D[i] = M[i] + offset + invisible_offset;
+    D[i] = M[i] + offset + simd_width;
     I[i] = D[i] + offset;
     current_ptr += (offset * 3) + invisible_offset;
   }
@@ -166,6 +166,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     simd_store(D_i + bid * simd_width, Neg_inf);
     // simd_store(I_i + bid * simd_width, Neg_inf);
   }
+  simd_store(M_i - simd_width, Neg_inf);
   simd_store(M_i + block_num * simd_width, Neg_inf);
   M_i[0] = P[char26_table['N']][0];
   I_i[0] = NEG_INF;
@@ -231,7 +232,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
           //   SEQ = _mm256_cvtepi8_epi32(seq_chunk);  // 符号扩展到32位
           // }
           // M[i][j] = std::max(M[i][j], M[p][j - 1] + q[cur.base][j]); // qsource
-          simd_reg TMP = pj == 0 ? simd_set_prev_and_load(NEG_INF, M_p + pj) : simd_loadu(M_p + pj - 1); //M[p][j - 1]
+          simd_reg TMP = simd_loadu(M_p + pj - 1); //M[p][j - 1]
 
           // reg mask = _mm256_cmpeq_epi32(PRE_BASE, SEQ);
           // // pre.base == seq[j - 1] ? match : mismatch
@@ -269,6 +270,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         simd_store(M_i + j, Mij);
       }
     }
+    simd_store(M_i - simd_width, Neg_inf);
     simd_store(M_i + block_num * simd_width, Neg_inf);
     // simd_store(D_i + block_num * simd_width, Neg_inf);
     I_i[0] = NEG_INF;
