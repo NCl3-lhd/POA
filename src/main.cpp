@@ -8,7 +8,6 @@
 
 // extern unsigned char nt4_table[256];
 int main(int argc, char** argv) {
-
   // handle arg
   cxxopts::Options options("minipoa", "A minimizer-based method for fast and memory-efficient partial order alignment\nExamples:\n  Sequencing mode for consensus calling:\tminipoa input.fasta > output.fasta\n  MSA mode for multiple sequence alignment:\tminipoa input.fasta -S -r1 -t thread > output.fasta\n  Generate graph information in GFA format:\tminipoa input.fasta -S -r2 -t thread > output.gfa");
 

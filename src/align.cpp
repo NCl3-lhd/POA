@@ -15,11 +15,11 @@ inline int calj(int acj, int Bs) {
   return  acj - Bs * simd_width;
 }
 
-std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end_id, int qid, const char* qseq, int qlen, aligned_buff_t* mpool, bool ab_band) {
+std::vector<res_t> poa(const para_t *para, const graph *DAG, int beg_id, int end_id, int qid, const char *qseq, int qlen, aligned_buff_t *mpool, bool ab_band) {
   std::chrono::microseconds total_part1(0);
   auto start1 = std::chrono::high_resolution_clock::now();
 
-  const std::vector<node_t>& node = DAG->node;const std::vector<int>& rank = DAG->rank;
+  const std::vector<node_t> &node = DAG->node;const std::vector<int> &rank = DAG->rank;
   int beg_i = node[beg_id].rank, end_i = node[end_id].rank;
   int n = end_i - beg_i + 1, m = qlen + 2;
   ab_band |= para->ab_band;
@@ -50,7 +50,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   std::vector<int> score(n);  // index is rank
   for (int i = 1; i < n; i++) { // ni topsort id dp
     int u = rank[i + beg_i];
-    const node_t& cur = node[u];
+    const node_t &cur = node[u];
     int wmax = -1, max_pre = -1;
     for (size_t k = 0; k < cur.in.size(); k++) {
       int v = cur.in[k];
@@ -70,7 +70,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   tlen[n - 1] = 1;
   for (int i = n - 2; i >= 0; i--) { // ni topsort id dp
     int u = rank[i + beg_i];
-    const node_t& cur = node[u];
+    const node_t &cur = node[u];
     int wmax = -1, max_suc = -1;
     for (size_t k = 0; k < cur.out.size(); k++) {
       int v = cur.out[k];
@@ -107,14 +107,14 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     // sum += Me[i] - Ms[i] + 1;
   }
   size_t sum = 0;
-  void* buff = nullptr;
+  void *buff = nullptr;
   if (para->verbose >= 2) std::cerr << "mtx size:" << (p_size + 3 * mtx_size) * sizeof(int) / 1024 / 1024 / 1024 << "GB" << "\n";
   if (mpool != nullptr) mpool->alloc_aligned(&buff, SIMD_BYTES, (p_size + 3 * mtx_size + invisible_size) * sizeof(int));
   else alloc_aligned(&buff, SIMD_BYTES, (p_size + 3 * mtx_size + invisible_size) * sizeof(int)); // malloc
 
-  std::vector<int*> P(para_m);
+  std::vector<int *> P(para_m);
   for (int i = 0; i < para_m; i++) {
-    P[i] = (int*)buff + i * col_size;
+    P[i] = (int *)buff + i * col_size;
     for (int j = 0; j < col_size; j++) {
       P[i][j] = para->mat[i * para_m + seq[j]];
     }
@@ -134,8 +134,8 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   //   D[i] = D[i - 1] + offset;
   //   I[i] = I[i - 1] + offset;
   // }
-  std::vector<int*> M(n), D(n), I(n); // 同一个 i 的 M, D, I 紧挨着排列
-  int* current_ptr = (int*)buff + p_size; // 跳过 Profile(P) 矩阵占用的空间
+  std::vector<int *> M(n), D(n), I(n); // 同一个 i 的 M, D, I 紧挨着排列
+  int *current_ptr = (int *)buff + p_size; // 跳过 Profile(P) 矩阵占用的空间
   for (int i = 0; i < n; i++) {
     int offset = (Be[i] - Bs[i]) * simd_width;
     int invisible_offset = 0;
@@ -156,9 +156,9 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
 
   // dp init
   int block_num = Be[0] - Bs[0]; // not contain Be[i] - 1 's block1
-  int* M_i = M[0];
-  int* D_i = D[0];
-  int* I_i = I[0];
+  int *M_i = M[0];
+  int *D_i = D[0];
+  int *I_i = I[0];
   for (int bid = 0; bid < block_num; bid++) {
     // memset(M, 0xc0, col_size * sizeof(int));//M[0] = NEG_INF
     // memset(D, 0xc0, col_size * sizeof(int));//D[0] = NEG_INF
@@ -181,7 +181,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
   for (int i = 1; i < n; i++) {
     // std::cerr << i << " " << n << "\n";
     int aci = beg_i + i;
-    const node_t& cur = node[rank[aci]];
+    const node_t &cur = node[rank[aci]];
     // std::cerr << aci << " " << cur.rank << " " << char256_table[cur.base] << "\n";
     if (hlen[i] == NEG_INF || tlen[i] == NEG_INF) continue;
     M_i = M[i];
@@ -204,15 +204,15 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     sum += Me[i] - Ms[i] + 1;
     int pre_num = 0;
     for (size_t k = 0; k < cur.in.size(); k++) {
-      const node_t& pre = node[cur.in[k]];
+      const node_t &pre = node[cur.in[k]];
       int p = pre.rank - beg_i; // rank
       if (p < 0 || hlen[p] == NEG_INF) continue;
       // reg PRE_BASE = _mm256_set1_epi32(p == 0 ? char26_table['N'] : pre.base);
 
       // int prev = NEG_INF;
       // char prech = char26_table['N'];
-      int* M_p = M[p];
-      int* D_p = D[p];
+      int *M_p = M[p];
+      int *D_p = D[p];
       for (int bid = 0; bid < block_num; bid++) { // SIMD
         int j = bid * simd_width;
         int acBid = (Bs[i] + bid);
@@ -274,16 +274,21 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     simd_store(M_i + block_num * simd_width, Neg_inf);
     // simd_store(D_i + block_num * simd_width, Neg_inf);
     I_i[0] = NEG_INF;
-    M_i[0] = std::max({ M_i[0], D_i[0], I_i[0] });
-    for (int j = 1; j < block_num * simd_width; j++) { // block_num * reg_size
-      I_i[j] = std::max(I_i[j - 1] + e1, M_i[j - 1] + o1); // isource
-      M_i[j] = std::max({ M_i[j], D_i[j], I_i[j] });  // three source
+    // M_i[0] = std::max({ M_i[0], D_i[0], I_i[0] });
+    // for (int j = 1; j < block_num * simd_width; j++) { // block_num * reg_size
+    //   I_i[j] = std::max(I_i[j - 1] + e1, M_i[j - 1] + o1); // isource
+    //   M_i[j] = std::max({ M_i[j], D_i[j], I_i[j] });  // three source
+    // }
+    for (int j = 0; j < block_num * simd_width - 1; j++) { // block_num * reg_size
+      int md = std::max(M_i[j], D_i[j]);
+      I_i[j + 1] = std::max(I_i[j] + e1, md + o1); // isource
+      M_i[j] = std::max(md, I_i[j]);  // three source
     }
     // simd_store(I_i + block_num * simd_width, Neg_inf);
 
     if (para->f > 0 && ab_band) {
       int max_j = 0;
-      for (int j = 1; j < block_num* simd_width; j++) { // block_num * reg_size
+      for (int j = 1; j < block_num *simd_width; j++) { // block_num * reg_size
         max_j = M_i[j] > M_i[max_j] ? j : max_j;
       }
       int max_acj = Bs[i] * simd_width + max_j, max_slp = 0;
@@ -354,14 +359,14 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       std::cerr << acj << "\n";
       exit(0);
     }
-    const node_t& cur = node[rank[aci]];
+    const node_t &cur = node[rank[aci]];
     int cur_base = i != n - 1 ? cur.base : char26_table['N'];
     int p_score = para->mat[cur_base * para_m + seq[acj]];
     if (op & M_OP && acj > 0) {  // M
       int bk = -1;
       if (cur_base == seq[acj]) {
         for (size_t k = 0; k < cur.in.size(); k++) {
-          const node_t& pre = node[cur.in[k]];
+          const node_t &pre = node[cur.in[k]];
           int p = pre.rank - beg_i; // rank
           if (p < 0 || hlen[p] == NEG_INF) continue;
           // M
@@ -374,7 +379,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         }
       }
       if (bk != -1 && cur.in_weight[bk] >= cur.ind / 10) {  // backtrack based on the normal sample
-        const node_t& pre = node[cur.in[bk]];
+        const node_t &pre = node[cur.in[bk]];
         int p = pre.rank - beg_i; // rank
         if (cur_base == seq[acj]) {
           // std::cout << "M";
@@ -382,7 +387,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         }
         else {
           // std::cout << "X";
-          const node_t& par = node[cur.par_id]; // dsu.find par
+          const node_t &par = node[cur.par_id]; // dsu.find par
           if (par.aligned_node[seq[acj]] != -1) {
             res.emplace_back(res_t(par.aligned_node[seq[acj]], seq[acj]));
           }
@@ -396,11 +401,11 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
     if (op & D_OP) {
       if (op == D_OP || M[i][j] == D[i][j]) {
         // std::cerr << M[i][j] << " " << D[i][j] << "\n";
-        const node_t& cur = node[rank[aci]];
+        const node_t &cur = node[rank[aci]];
         // std::cerr << M[i * col_size + j] << " " << D[i * col_size + j] << "\n";
         int bk = -1;char bop;
         for (size_t k = 0; k < cur.in.size(); k++) {
-          const node_t& pre = node[cur.in[k]];
+          const node_t &pre = node[cur.in[k]];
           int p = pre.rank - beg_i; // rank
           if (p < 0 || hlen[p] == NEG_INF) continue;
           int pj = calj(acj, Bs[p]);
@@ -415,7 +420,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         }
         if (bk == -1) {
           for (size_t k = 0; k < cur.in.size(); k++) {
-            const node_t& pre = node[cur.in[k]];
+            const node_t &pre = node[cur.in[k]];
             int p = pre.rank - beg_i; // rank
             if (p < 0 || hlen[p] == NEG_INF) continue;
             int pj = calj(acj, Bs[p]);
@@ -456,10 +461,10 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       }
     }
     if (op & M_OP && acj > 0) {  // MX
-      const node_t& cur = node[rank[aci]];
+      const node_t &cur = node[rank[aci]];
       int bk = -1;
       for (size_t k = 0; k < cur.in.size(); k++) {
-        const node_t& pre = node[cur.in[k]];
+        const node_t &pre = node[cur.in[k]];
         int p = pre.rank - beg_i; // rank
         // if (ans == -2314 && M[i][j] == -18) {
         //   std::cerr << i << " " << j << "\n";
@@ -479,7 +484,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
       }
       if (bk != -1) {
         // std::cerr << "M";
-        const node_t& pre = node[cur.in[bk]];
+        const node_t &pre = node[cur.in[bk]];
         int p = pre.rank - beg_i; // rank
         if (cur_base == seq[acj]) {
           // std::cout << "M";
@@ -487,7 +492,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
         }
         else {
           // std::cout << "X";
-          const node_t& par = node[cur.par_id]; // dsu.find par
+          const node_t &par = node[cur.par_id]; // dsu.find par
           if (par.aligned_node[seq[acj]] != -1) {
             res.emplace_back(res_t(par.aligned_node[seq[acj]], seq[acj]));
           }
@@ -515,7 +520,7 @@ std::vector<res_t> poa(const para_t* para, const graph* DAG, int beg_id, int end
 // #define sort_key_mm128x(a) ((a).x)
 // KRADIX_SORT_INIT(mm128x, mm128_t, sort_key_mm128x, 8)
 
-std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, int rid, const char* qseq, int qlen, aligned_buff_t* mpool) {
+std::vector<res_t> alignment(const para_t *para, graph *DAG, minimizer_t *mm, int rid, const char *qseq, int qlen, aligned_buff_t *mpool) {
   std::string tseq;
   for (int j = 0; j < qlen; j++) {
     tseq += char26_table[(int)qseq[j]];
@@ -559,7 +564,7 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
       for (int k = 0; k < q_span; k++, j++) {
         end_id = DAG->cons_pos_to_id[end_tpos + k];
         if (k != q_span - 1) {
-          const node_t& cur = DAG->node[end_id];
+          const node_t &cur = DAG->node[end_id];
           res.emplace_back(res_t(cur.id, cur.base));
         }
       }
@@ -574,7 +579,7 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
     int n = anchors.n;
     std::vector<std::vector<res_t>> res_v;
     res_v.resize(n + 1);
-    #pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(static)
     for (int i = 0; i < n + 1; i++) {
       int tid = omp_get_thread_num();
       int beg_id, end_id, start_qpos, qlen, q_span = para->k, end_qpos;
@@ -589,7 +594,7 @@ std::vector<res_t> alignment(const para_t* para, graph* DAG, minimizer_t* mm, in
         for (int k = 0; k < q_span - 1; k++) {
           int end_tpos = (int)anchors.a[i].x - q_span + 1;
           int cur_id = DAG->cons_pos_to_id[end_tpos + k];
-          const node_t& cur = DAG->node[cur_id];
+          const node_t &cur = DAG->node[cur_id];
           ret.emplace_back(res_t(cur.id, cur.base));
         }
       }
