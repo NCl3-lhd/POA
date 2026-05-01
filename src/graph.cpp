@@ -476,17 +476,15 @@ void graph::output_gfa(const std::vector<int> &rid_to_ord, const std::vector<seq
     int seq_id = ret.first;
     std::vector<int> node_ids = ret.second;
     if (seq_id == -1) break; // End of file check
-    std::cout << "P\t" << seqs[seq_id].name << "\t";
+    std::cout << "P\t" << seqs[seq_id].name << "+";
     for (i = 0; i < node_ids.size(); i++) {
-      std::cout << node_ids[i] << "\t";
-      if (i != int(node_ids.size()) - 1) {
+      std::cout << node_ids[i] - 1<< "\t";
+      if (i < int(node_ids.size()) - 1) {
         // fprintf(out_fp, ",");
         std::cout << ",";
       }
-      else {
-        // fprintf(out_fp, "\t*\n");
-        std::cout << "\t*\n";
-      }
     }
+      // fprintf(out_fp, "\t*\n");
+    std::cout << "\t*\n";
   }
 }

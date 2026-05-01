@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
   std::vector<seq_t> seqs;
   graph* DAG = new graph();
   DAG->init(para);
-  PathWriter writer(tmp_path_file);
+  PathWriter *writer = para->result ? new PathWriter(tmp_path_file) : nullptr;
 
   if (!para->inc_fp.empty()) seqs = read_gfa(para, DAG, para->inc_fp.c_str());
   
@@ -131,11 +131,11 @@ int main(int argc, char** argv) {
     if (para->verbose >= 2) std::cerr << "aligment" << "\n";
     std::vector<res_t> res = alignment(para, DAG, mm, rid, seqs[rid].seq.c_str(), seqs[rid].seq.size(), mpool);
     if (para->verbose >= 2) std::cerr << "add path" << "\n";
-    DAG->add_path(para, rid, res, &writer, 1);
+    DAG->add_path(para, rid, res, writer, 1);
     if (para->verbose >= 2) std::cerr << "topsort" << "\n";
     DAG->topsort(para, i + 1 == seqs.size());
   }
-  writer.close();
+  writer->close();
   // Timer::instance().start("output");
   if (para->verbose) std::cerr << "out_put" << "\n";
   if (para->result == 0) DAG->output_consensus();
@@ -146,6 +146,8 @@ int main(int argc, char** argv) {
   
   // delete
   unlink(tmp_path_file);
+  delete writer;
+  writer = nullptr;
   delete[] mpool;
   mpool = nullptr;  // 防止后续误用
   delete para;
