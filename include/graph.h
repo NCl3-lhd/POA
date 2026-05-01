@@ -6,6 +6,10 @@
 #include "result.h"
 #include "sequence.h"
 #include "parameter.h"
+#include "file_io.h"
+
+class PathWriter;
+
 struct graph {
   // 成员声明
   std::vector<node_t> node; //index is id
@@ -17,7 +21,7 @@ struct graph {
   void init(para_t* para, int seq_id, const std::string& str);
   int add_node(para_t* para, char base);
   void add_adj(int seq_id, int from, int to, int curPos);
-  void add_path(int para_m, int seq_id, const std::vector<res_t>& res, int sink_id = -1);
+  void add_path(int para_m, int seq_id, const std::vector<res_t> &res, PathWriter * writer, int sink_id = -1);
   void topsort(const para_t* para, int op);
   void output_rc_msa(para_t* para, const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs);
   void output_consensus(bool needCoverages = false);

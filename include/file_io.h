@@ -6,6 +6,7 @@
 #include "graph.h"
 #include <unistd.h>
 
+class graph;
 constexpr const char *tmp_path_file = "minipoa_paths.tmp";
 
 void readFile(para_t* para, std::vector<seq_t>& seqs, const char* path);

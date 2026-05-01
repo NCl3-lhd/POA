@@ -168,7 +168,7 @@ void graph::init(para_t *para, int seq_id, const std::string &str) {
   add_adj(0, pre_id, 1, str.size()); // 
   topsort(para, 0);
 }
-void graph::add_path(int para_m, int seq_id, const std::vector<res_t> &res, int sink_id) {
+void graph::add_path(int para_m, int seq_id, const std::vector<res_t> &res, PathWriter *writer, int sink_id) {
   // node_h.emplace_back(node.size());
   int anchored_id = -1; // sink
   // std::cerr << seq_id << " " << res.size() << "\n";
@@ -231,17 +231,15 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t> &res, int 
         add_adj(seq_id, anchored_id, cur_id, curPos++);
       }
     }
-    if (anchored_id >= 2) path_node_ids.emplace_back(anchored_id);
     anchored_id = cur_id;
+    if (anchored_id >= 2) path_node_ids.emplace_back(anchored_id);
   }
   if (sink_id != -1) {
     add_adj(seq_id, anchored_id, sink_id, curPos); // anchored -> sink
-    if (sink_id >= 2) path_node_ids.emplace_back(sink_id);
   }
   is_topsorted = false;
 
-  PathWriter writer(tmp_path_file);
-  writer.write_path(seq_id, path_node_ids);
+  writer->write_path(seq_id, path_node_ids);
   // std::cerr << "finish add path" << "\n";
 }
 
