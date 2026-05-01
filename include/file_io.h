@@ -5,7 +5,6 @@
 #include "parameter.h"
 #include "graph.h"
 #include <unistd.h>
-#include "file_io.h"
 
 class graph;
 constexpr const char *tmp_path_file = "minipoa_paths.tmp";
