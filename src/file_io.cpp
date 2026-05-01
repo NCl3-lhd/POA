@@ -195,12 +195,13 @@ int gfa_parse_P(para_t *para, graph *DAG, std::vector<seq_t> &seqs, seg_seq_t *s
         // std::cerr << last_id << " " << in_id << "\n";
         // abpoa_add_graph_edge(abg, last_id, in_id, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
         DAG->add_adj(last_id, in_id);
-        path_node_ids.emplace_back(in_id);
         if (in_id < out_id) {
           for (i = 0; i < out_id - in_id; ++i) {
             // std::cerr << in_id + i << " " << in_id + i + 1 << "\n";
             DAG->add_adj(in_id + i, in_id + i + 1);
-            path_node_ids.emplace_back(in_id + i + 1);
+          }
+          for (i = in_id; i <= out_id; i++) {
+            path_node_ids.emplace_back(i);
           }
         }
         else if (in_id > out_id) err_fatal(__func__, "Error: in_id (%d) > out_id (%d).", in_id, out_id);
@@ -237,13 +238,16 @@ int gfa_parse_P(para_t *para, graph *DAG, std::vector<seq_t> &seqs, seg_seq_t *s
         // add edge
 
         DAG->add_adj(out_id, next_id);
-        path_node_ids.emplace_back(out_id);
 
         // abpoa_add_graph_edge(abg, out_id, next_id, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
         if (in_id < out_id) {
-          for (i = 0; i < out_id - in_id; ++i)
+          for (i = 0; i < out_id - in_id; ++i) {
             DAG->add_adj(in_id + i, in_id + i + 1);
-          path_node_ids.emplace_back(in_id + i);
+            path_node_ids.emplace_back(in_id + i);
+          }
+          for (i = out_id; i >= in_id; --i) {
+            path_node_ids.emplace_back(i);
+          }
           // abpoa_add_graph_edge(abg, in_id + i, in_id + i + 1, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
         }
         else if (in_id > out_id) err_fatal(__func__, "Error: in_id (%d) > out_id (%d).", in_id, out_id);
@@ -256,7 +260,6 @@ int gfa_parse_P(para_t *para, graph *DAG, std::vector<seq_t> &seqs, seg_seq_t *s
     if (is_rc) {
       // abpoa_add_graph_edge(abg, ABPOA_SRC_NODE_ID, next_id, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
       DAG->add_adj(0, next_id);
-      std::reverse(path_node_ids.begin(), path_node_ids.end());
     }
     else {
       // abpoa_add_graph_edge(abg, last_id, ABPOA_SINK_NODE_ID, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
