@@ -168,8 +168,9 @@ void graph::init(para_t *para, int seq_id, const std::string &str) {
   add_adj(0, pre_id, 1, str.size()); // 
   topsort(para, 0);
 }
-void graph::add_path(int para_m, int seq_id, const std::vector<res_t> &res, PathWriter *writer, int sink_id) {
+void graph::add_path(const para_t *para, int seq_id, const std::vector<res_t> &res, PathWriter *writer, int sink_id) {
   // node_h.emplace_back(node.size());
+  int para_m = para->m;
   int anchored_id = -1; // sink
   // std::cerr << seq_id << " " << res.size() << "\n";
   int curPos = 0;
@@ -232,7 +233,7 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t> &res, Path
       }
     }
     anchored_id = cur_id;
-    if (anchored_id >= 2) path_node_ids.emplace_back(anchored_id);
+    if (para->result && anchored_id >= 2) path_node_ids.emplace_back(anchored_id);
   }
   if (sink_id != -1) {
     add_adj(seq_id, anchored_id, sink_id, curPos); // anchored -> sink
@@ -265,7 +266,7 @@ void graph::output_rc_msa(para_t *para, const std::vector<int> &rid_to_ord, cons
     return;
   }
   std::string row(rank.size() - 2, '-');
-  while(1) {
+  while (1) {
     auto [seq_id, node_ids] = reader.read_next_path();
     if (seq_id == -1) break; // End of file check
     row.assign(rank.size() - 2, '-');
@@ -394,9 +395,9 @@ void graph::output_gfa(const std::vector<int> &rid_to_ord, const std::vector<seq
   int n_seq = seqs.size();
   std::vector<int> deg(node.size());
   // int** read_paths = (int**)_err_malloc(n_seq * sizeof(int*)), * read_path_i = (int*)_err_calloc(n_seq, sizeof(int));
-  int i, j, cur_id, pre_id, out_id;
+  int i, cur_id, pre_id, out_id;
   for (i = 0; i < node.size(); ++i) deg[i] = node[i].in.size();
-  std::vector<std::vector<int>> read_paths(seqs.size());
+  // std::vector<std::vector<int>> read_paths(seqs.size());
   // for (i = 0; i < n_seq; ++i) read_paths[i].resize(seqs[rid_to_ord[i]].seq.size());  // i is ord
 
   // output comment and header
@@ -425,12 +426,12 @@ void graph::output_gfa(const std::vector<int> &rid_to_ord, const std::vector<seq
           }
         }
         // add node id to read path
-        for (int j = 0; j < node[cur_id].ids.size(); j++) {
-          int id = node[cur_id].ids[j];
-          // int idp = node[cur_id].idp[j];
-          read_paths[id].emplace_back(cur_id - 1);
-          // read_paths[id][idp] = cur_id - 1;
-        }
+        // for (int j = 0; j < node[cur_id].ids.size(); j++) {
+        //   int id = node[cur_id].ids[j];
+        //   // int idp = node[cur_id].idp[j];
+        //   read_paths[id].emplace_back(cur_id - 1);
+        //   // read_paths[id][idp] = cur_id - 1;
+        // }
       }
       for (i = 0; i < node[cur_id].out.size(); ++i) {
         out_id = node[cur_id].out[i];
@@ -442,18 +443,43 @@ void graph::output_gfa(const std::vector<int> &rid_to_ord, const std::vector<seq
   }
   // output read paths
   // std::cerr << "output read paths" << "\n";
-  for (i = 0; i < n_seq; ++i) {
-    if (seqs[i].name.size() > 0) {
-      // fprintf(out_fp, "P\t%s\t", abs->name[i].s);
-      std::cout << "P\t" << seqs[i].name << "\t";
-    }
-    else {
-      std::cout << "P\t" << i + 1 << "\t";
-    }
-    for (j = 0; j < read_paths[i].size(); ++j) {
-      // fprintf(out_fp, "%d+", read_paths[i][j]);
-      std::cout << read_paths[rid_to_ord[i]][j] << "+";
-      if (j != int(read_paths[i].size()) - 1) {
+
+  // for (i = 0; i < n_seq; ++i) {
+  //   if (seqs[i].name.size() > 0) {
+  //     // fprintf(out_fp, "P\t%s\t", abs->name[i].s);
+  //     std::cout << "P\t" << seqs[i].name << "\t";
+  //   }
+  //   else {
+  //     std::cout << "P\t" << i + 1 << "\t";
+  //   }
+  //   for (j = 0; j < read_paths[i].size(); ++j) {
+  //     // fprintf(out_fp, "%d+", read_paths[i][j]);
+  //     std::cout << read_paths[rid_to_ord[i]][j] << "+";
+  //     if (j != int(read_paths[i].size()) - 1) {
+  //       // fprintf(out_fp, ",");
+  //       std::cout << ",";
+  //     }
+  //     else {
+  //       // fprintf(out_fp, "\t*\n");
+  //       std::cout << "\t*\n";
+  //     }
+  //   }
+  // }
+  PathReader reader(tmp_path_file);
+  if (!reader.is_open()) {
+    // Handle error
+    std::cerr << "read file: " << tmp_path_file << "error" << "\n";
+    return;
+  }
+  while (1) {
+    std::pair<int32_t, std::vector<int>> ret = reader.read_next_path();
+    int seq_id = ret.first;
+    std::vector<int> node_ids = ret.second;
+    if (seq_id == -1) break; // End of file check
+    std::cout << "P\t" << seqs[seq_id].name << "\t";
+    for (i = 0; i < node_ids.size(); i++) {
+      std::cout << node_ids[i] << "\t";
+      if (i != int(node_ids.size()) - 1) {
         // fprintf(out_fp, ",");
         std::cout << ",";
       }

@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
     if (para->verbose >= 2) std::cerr << "aligment" << "\n";
     std::vector<res_t> res = alignment(para, DAG, mm, rid, seqs[rid].seq.c_str(), seqs[rid].seq.size(), mpool);
     if (para->verbose >= 2) std::cerr << "add path" << "\n";
-    DAG->add_path(para->m, rid, res, &writer, 1);
+    DAG->add_path(para, rid, res, &writer, 1);
     if (para->verbose >= 2) std::cerr << "topsort" << "\n";
     DAG->topsort(para, i + 1 == seqs.size());
   }
