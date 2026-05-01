@@ -5,16 +5,13 @@
 #include "parameter.h"
 #include "graph.h"
 #include <unistd.h>
+#include "file_io.h"
 
 class graph;
 constexpr const char *tmp_path_file = "minipoa_paths.tmp";
 
 void readFile(para_t* para, std::vector<seq_t>& seqs, const char* path);
 void initPara(para_t* para);
-std::vector<seq_t> read_gfa(para_t* para, graph* DAG, const char* path);
-int gfa_parse_S(para_t* para, graph* DAG, seg_seq_t* segs, char* s);
-int gfa_parse_W(para_t* para, graph* DAG, std::vector<seq_t>& seqs, seg_seq_t* segs, char* s);
-int gfa_parse_P(para_t* para, graph* DAG, std::vector<seq_t>& seqs, seg_seq_t* segs, char* s);
 
 struct PathWriter {
 
@@ -55,5 +52,10 @@ struct PathReader {
   // Returns true on success, false on EOF or error.
   bool read_varint(uint32_t &value);
 };
+
+std::vector<seq_t> read_gfa(para_t *para, graph *DAG, const char *path, PathWriter *writer);
+int gfa_parse_S(para_t *para, graph *DAG, seg_seq_t *segs, char *s);
+// int gfa_parse_W(para_t* para, graph* DAG, std::vector<seq_t>& seqs, seg_seq_t* segs, char* s);
+int gfa_parse_P(para_t *para, graph *DAG, std::vector<seq_t> &seqs, seg_seq_t *segs, char *s, PathWriter *writer);
 
 #endif

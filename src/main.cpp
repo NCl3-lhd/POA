@@ -97,7 +97,7 @@ int main(int argc, char** argv) {
   DAG->init(para);
   PathWriter *writer = para->result ? new PathWriter(tmp_path_file) : nullptr;
 
-  if (!para->inc_fp.empty()) seqs = read_gfa(para, DAG, para->inc_fp.c_str());
+  if (!para->inc_fp.empty()) seqs = read_gfa(para, DAG, para->inc_fp.c_str(), writer);
   
   int exist_seq_num = seqs.size();
   try {
@@ -137,7 +137,6 @@ int main(int argc, char** argv) {
   }
   if (para->result) {
     writer->close();
-    unlink(tmp_path_file);
   }
   // Timer::instance().start("output");
   if (para->verbose) std::cerr << "out_put" << "\n";
@@ -148,6 +147,7 @@ int main(int argc, char** argv) {
   // Timer::instance().print();
   
   // delete
+  if (para->result) unlink(tmp_path_file);
   delete writer;
   writer = nullptr;
   delete[] mpool;

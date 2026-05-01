@@ -6,6 +6,7 @@
 #include "sequence.h" 
 #include "utils.h"
 #include <stdlib.h>
+#include <algorithm>
 
 KSEQ_INIT(gzFile, gzread)
 
@@ -132,7 +133,7 @@ int gfa_parse_S(para_t* para, graph* DAG, seg_seq_t* segs, char* s) {
   return 0;
 
 }
-int gfa_parse_P(para_t* para, graph* DAG, std::vector<seq_t>& seqs, seg_seq_t* segs, char* s) {
+int gfa_parse_P(para_t *para, graph *DAG, std::vector<seq_t> &seqs, seg_seq_t *segs, char *s, PathWriter *writer) {
   if (s[1] != '\t' || s[2] == '\0') return -1;
   char* end_s, * start_s, * path = 0;
   int i, is_ok = 0, is_rc = -1;
@@ -158,6 +159,7 @@ int gfa_parse_P(para_t* para, graph* DAG, std::vector<seq_t>& seqs, seg_seq_t* s
   }
 
   if (is_ok) {
+    std::vector<int> path_node_ids;
     char* deli_s, * info_s, * _seg_name; khint_t pos, seg_pos; int absent;
     int id, in_id = -1, out_id = -1, last_id = 0, next_id = 1;
     int curPos = 0;
@@ -192,11 +194,13 @@ int gfa_parse_P(para_t* para, graph* DAG, std::vector<seq_t>& seqs, seg_seq_t* s
         // add edge
         // std::cerr << last_id << " " << in_id << "\n";
         // abpoa_add_graph_edge(abg, last_id, in_id, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
-        DAG->add_adj(seqs.size(), last_id, in_id, curPos++);
+        DAG->add_adj(last_id, in_id);
+        path_node_ids.emplace_back(in_id);
         if (in_id < out_id) {
           for (i = 0; i < out_id - in_id; ++i) {
             // std::cerr << in_id + i << " " << in_id + i + 1 << "\n";
-            DAG->add_adj(seqs.size(), in_id + i, in_id + i + 1, curPos++);
+            DAG->add_adj(in_id + i, in_id + i + 1);
+            path_node_ids.emplace_back(in_id + i + 1);
           }
         }
         else if (in_id > out_id) err_fatal(__func__, "Error: in_id (%d) > out_id (%d).", in_id, out_id);
@@ -232,11 +236,14 @@ int gfa_parse_P(para_t* para, graph* DAG, std::vector<seq_t>& seqs, seg_seq_t* s
 
         // add edge
 
-        DAG->add_adj(seqs.size(), out_id, next_id, curPos++);
+        DAG->add_adj(out_id, next_id);
+        path_node_ids.emplace_back(out_id);
+
         // abpoa_add_graph_edge(abg, out_id, next_id, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
         if (in_id < out_id) {
           for (i = 0; i < out_id - in_id; ++i)
-            DAG->add_adj(seqs.size(), in_id + i, in_id + i + 1, curPos++);
+            DAG->add_adj(in_id + i, in_id + i + 1);
+          path_node_ids.emplace_back(in_id + i);
           // abpoa_add_graph_edge(abg, in_id + i, in_id + i + 1, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
         }
         else if (in_id > out_id) err_fatal(__func__, "Error: in_id (%d) > out_id (%d).", in_id, out_id);
@@ -248,204 +255,205 @@ int gfa_parse_P(para_t* para, graph* DAG, std::vector<seq_t>& seqs, seg_seq_t* s
     }
     if (is_rc) {
       // abpoa_add_graph_edge(abg, ABPOA_SRC_NODE_ID, next_id, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
-      DAG->add_adj(seqs.size(), 0, next_id, curPos++);
+      DAG->add_adj(0, next_id);
+      std::reverse(path_node_ids.begin(), path_node_ids.end());
     }
     else {
       // abpoa_add_graph_edge(abg, last_id, ABPOA_SINK_NODE_ID, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
-      DAG->add_adj(seqs.size(), last_id, 1, curPos++);
-
+      DAG->add_adj(last_id, 1);
     }
     // set abs
+    // abpoa_cpy_str(abs->name + abs->n_seq, walk_name, walk_name_len);
     seq_t tseq;
     tseq.name = path_name;
-    // abpoa_cpy_str(abs->name + abs->n_seq, walk_name, walk_name_len);
+    if (para->result) writer->write_path(seqs.size(), path_node_ids);
     seqs.emplace_back(tseq);
     // abs->is_rc[abs->n_seq] = is_rc; abs->n_seq++;
   }
   else err_fatal(__func__, "Error: no path in GFA path line (%s).", path_name);
   return 0;
 }
-int gfa_parse_W(para_t* para, graph* DAG, std::vector<seq_t>& seqs, seg_seq_t* segs, char* s) {
-  if (s[1] != '\t' || s[2] == '\0') return -1;
-  char* end_s, * start_s, * path = 0;
-  int i, is_ok = 0, is_rc = -1;
-  char* walk_name = 0; int walk_name_len = 0;
-  kstring_t* seg_seq, * seg_name;
-  int start_pos, end_pos;
-  // std::cerr << s << "\n";
-  for (i = 0, end_s = start_s = s + 2;; ++end_s) {
-    if (*end_s == '\0' || *end_s == '\t') {
-      int c = *end_s;
-      *end_s = '\0';
-      if (i == 0) {
-        // walk id
-      }
-      else if (i == 1) {
+// int gfa_parse_W(para_t* para, graph* DAG, std::vector<seq_t>& seqs, seg_seq_t* segs, char* s) {
+//   if (s[1] != '\t' || s[2] == '\0') return -1;
+//   char* end_s, * start_s, * path = 0;
+//   int i, is_ok = 0, is_rc = -1;
+//   char* walk_name = 0; int walk_name_len = 0;
+//   kstring_t* seg_seq, * seg_name;
+//   int start_pos, end_pos;
+//   // std::cerr << s << "\n";
+//   for (i = 0, end_s = start_s = s + 2;; ++end_s) {
+//     if (*end_s == '\0' || *end_s == '\t') {
+//       int c = *end_s;
+//       *end_s = '\0';
+//       if (i == 0) {
+//         // walk id
+//       }
+//       else if (i == 1) {
 
-      }
-      else if (i == 2) {
-        walk_name = start_s;
-        walk_name_len = end_s - start_s;
-      }
-      else if (i == 3) {
-        start_pos = atoi(start_s);
-      }
-      else if (i == 4) {
-        end_pos = atoi(start_s);
-      }
-      else if (i == 5) {
-        path = start_s;
-        is_ok = 1;
-        break;
-      }
-      if (c == 0) break;
-      ++i, start_s = end_s + 1;
-    }
-  }
-  // std::cerr << walk_name << " " << path << "\n";
-  // std::cerr << "ok" << "\n";
-  // std::cerr << start_pos << " " << end_pos << "\n";
-  std::vector<int> path_node;
-  if (is_ok) {
-    char* end_s, * start_s, * _seg_name; khint_t pos, seg_pos; int absent;
-    int id, in_id = -1, out_id = -1, last_id = 0, next_id = 1;
-    int curPos = 0;
-    for (end_s = start_s = path + 1; ; ++end_s) {
-      if (*end_s == '>') {
-        if (is_rc == 1) err_fatal(__func__, "Error: walk has both \'>\' and \'<\' seg. (%s)", walk_name);
-        is_rc = 0; *end_s = '\0'; _seg_name = start_s;
-        // std::cerr << _seg_name << " ";
-        // if (_seg_name == "s211") {
-        //   exit(1);
-        // }
-        seg_pos = kh_get(str, segs->h, _seg_name);
-        if (seg_pos == kh_end(segs->h)) err_fatal(__func__, "Error: seg (%s) not exist.", start_s);
-        seg_name = segs->name + kh_val(segs->h, seg_pos);
-        seg_seq = segs->seq + kh_val(segs->h, seg_pos);
+//       }
+//       else if (i == 2) {
+//         walk_name = start_s;
+//         walk_name_len = end_s - start_s;
+//       }
+//       else if (i == 3) {
+//         start_pos = atoi(start_s);
+//       }
+//       else if (i == 4) {
+//         end_pos = atoi(start_s);
+//       }
+//       else if (i == 5) {
+//         path = start_s;
+//         is_ok = 1;
+//         break;
+//       }
+//       if (c == 0) break;
+//       ++i, start_s = end_s + 1;
+//     }
+//   }
+//   // std::cerr << walk_name << " " << path << "\n";
+//   // std::cerr << "ok" << "\n";
+//   // std::cerr << start_pos << " " << end_pos << "\n";
+//   std::vector<int> path_node;
+//   if (is_ok) {
+//     char* end_s, * start_s, * _seg_name; khint_t pos, seg_pos; int absent;
+//     int id, in_id = -1, out_id = -1, last_id = 0, next_id = 1;
+//     int curPos = 0;
+//     for (end_s = start_s = path + 1; ; ++end_s) {
+//       if (*end_s == '>') {
+//         if (is_rc == 1) err_fatal(__func__, "Error: walk has both \'>\' and \'<\' seg. (%s)", walk_name);
+//         is_rc = 0; *end_s = '\0'; _seg_name = start_s;
+//         // std::cerr << _seg_name << " ";
+//         // if (_seg_name == "s211") {
+//         //   exit(1);
+//         // }
+//         seg_pos = kh_get(str, segs->h, _seg_name);
+//         if (seg_pos == kh_end(segs->h)) err_fatal(__func__, "Error: seg (%s) not exist.", start_s);
+//         seg_name = segs->name + kh_val(segs->h, seg_pos);
+//         seg_seq = segs->seq + kh_val(segs->h, seg_pos);
 
-        // check if seg already exist
-        in_id = segs->start_id.a[kh_val(segs->h, seg_pos)];
-        out_id = segs->end_id.a[kh_val(segs->h, seg_pos)];
-        // pos = kh_put(str, seg_name2in_id, seg_name->s, &absent);
-        // if (absent) { // add node for seg_seq
-        //   for (i = 0; i < (int)seg_seq->l; ++i) {
-        //     id = abpoa_add_graph_node(abg, ab_char26_table[(int)(seg_seq->s[i])]);
-        //     if (i == 0) in_id = id;
-        //     if (i == (int)seg_seq->l - 1) out_id = id;
-        //   }
-        //   kh_val(seg_name2in_id, pos) = in_id;
-        //   pos = kh_put(str, seg_name2out_id, seg_name->s, &absent);
-        //   kh_val(seg_name2out_id, pos) = out_id;
-        // }
-        // else {
-        //   in_id = kh_val(seg_name2in_id, pos);
-        //   pos = kh_put(str, seg_name2out_id, seg_name->s, &absent);
-        //   out_id = kh_val(seg_name2out_id, pos);
-        // }
-        // add edge
-        // std::cerr << in_id << " " << out_id << "\n";
-        // DAG->add_adj(seqs.size(), last_id, in_id, curPos++);
-        path_node.push_back(in_id);
-        // std::cerr << last_id << " " << in_id << "\n";
-        // abpoa_add_graph_edge(abg, last_id, in_id, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
-        if (in_id < out_id) {
-          for (i = 0; i < out_id - in_id; ++i) {
-            // std::cerr << in_id + i << " " << in_id + i + 1 << "\n";
-            path_node.push_back(in_id + i + 1);
-            // DAG->add_adj(seqs.size(), in_id + i, in_id + i + 1, curPos++);
-          }
-        }
-        else if (in_id > out_id) err_fatal(__func__, "Error: in_id (%d) > out_id (%d).", in_id, out_id);
+//         // check if seg already exist
+//         in_id = segs->start_id.a[kh_val(segs->h, seg_pos)];
+//         out_id = segs->end_id.a[kh_val(segs->h, seg_pos)];
+//         // pos = kh_put(str, seg_name2in_id, seg_name->s, &absent);
+//         // if (absent) { // add node for seg_seq
+//         //   for (i = 0; i < (int)seg_seq->l; ++i) {
+//         //     id = abpoa_add_graph_node(abg, ab_char26_table[(int)(seg_seq->s[i])]);
+//         //     if (i == 0) in_id = id;
+//         //     if (i == (int)seg_seq->l - 1) out_id = id;
+//         //   }
+//         //   kh_val(seg_name2in_id, pos) = in_id;
+//         //   pos = kh_put(str, seg_name2out_id, seg_name->s, &absent);
+//         //   kh_val(seg_name2out_id, pos) = out_id;
+//         // }
+//         // else {
+//         //   in_id = kh_val(seg_name2in_id, pos);
+//         //   pos = kh_put(str, seg_name2out_id, seg_name->s, &absent);
+//         //   out_id = kh_val(seg_name2out_id, pos);
+//         // }
+//         // add edge
+//         // std::cerr << in_id << " " << out_id << "\n";
+//         // DAG->add_adj(seqs.size(), last_id, in_id, curPos++);
+//         path_node.push_back(in_id);
+//         // std::cerr << last_id << " " << in_id << "\n";
+//         // abpoa_add_graph_edge(abg, last_id, in_id, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
+//         if (in_id < out_id) {
+//           for (i = 0; i < out_id - in_id; ++i) {
+//             // std::cerr << in_id + i << " " << in_id + i + 1 << "\n";
+//             path_node.push_back(in_id + i + 1);
+//             // DAG->add_adj(seqs.size(), in_id + i, in_id + i + 1, curPos++);
+//           }
+//         }
+//         else if (in_id > out_id) err_fatal(__func__, "Error: in_id (%d) > out_id (%d).", in_id, out_id);
 
-        last_id = out_id;
-        start_s = end_s + 1;
-      }
-      else if (*end_s == '<') { // is not correct, not support <
-        if (is_rc == 0) err_fatal(__func__, "Error: walk has both \'>\' and \'<\' seg. (%s)", walk_name);
-        is_rc = 1; *end_s = '\0'; _seg_name = start_s;
-        seg_pos = kh_get(str, segs->h, _seg_name);
-        if (seg_pos == kh_end(segs->h)) err_fatal(__func__, "Error: seg (%s) not exist.", start_s);
-        seg_name = segs->name + kh_val(segs->h, seg_pos);
-        seg_seq = segs->seq + kh_val(segs->h, seg_pos);
+//         last_id = out_id;
+//         start_s = end_s + 1;
+//       }
+//       else if (*end_s == '<') { // is not correct, not support <
+//         if (is_rc == 0) err_fatal(__func__, "Error: walk has both \'>\' and \'<\' seg. (%s)", walk_name);
+//         is_rc = 1; *end_s = '\0'; _seg_name = start_s;
+//         seg_pos = kh_get(str, segs->h, _seg_name);
+//         if (seg_pos == kh_end(segs->h)) err_fatal(__func__, "Error: seg (%s) not exist.", start_s);
+//         seg_name = segs->name + kh_val(segs->h, seg_pos);
+//         seg_seq = segs->seq + kh_val(segs->h, seg_pos);
 
-        // check if seg exist
-        in_id = segs->start_id.a[seg_pos];
-        out_id = segs->end_id.a[seg_pos];
-        // pos = kh_put(str, seg_name2in_id, seg_name->s, &absent);
-        // if (absent) { // add node for seg_seq
-        //   for (i = 0; i < (int)seg_seq->l; ++i) {
-        //     id = abpoa_add_graph_node(abg, ab_char26_table[(int)(seg_seq->s[i])]);
-        //     if (i == 0) in_id = id;
-        //     if (i == (int)seg_seq->l - 1) out_id = id;
-        //   }
-        //   kh_val(seg_name2in_id, pos) = in_id;
-        //   pos = kh_put(str, seg_name2out_id, seg_name->s, &absent);
-        //   kh_val(seg_name2out_id, pos) = out_id;
-        // }
-        // else {
-        //   in_id = kh_val(seg_name2in_id, pos); out_id = kh_val(seg_name2out_id, pos);
-        // }
+//         // check if seg exist
+//         in_id = segs->start_id.a[seg_pos];
+//         out_id = segs->end_id.a[seg_pos];
+//         // pos = kh_put(str, seg_name2in_id, seg_name->s, &absent);
+//         // if (absent) { // add node for seg_seq
+//         //   for (i = 0; i < (int)seg_seq->l; ++i) {
+//         //     id = abpoa_add_graph_node(abg, ab_char26_table[(int)(seg_seq->s[i])]);
+//         //     if (i == 0) in_id = id;
+//         //     if (i == (int)seg_seq->l - 1) out_id = id;
+//         //   }
+//         //   kh_val(seg_name2in_id, pos) = in_id;
+//         //   pos = kh_put(str, seg_name2out_id, seg_name->s, &absent);
+//         //   kh_val(seg_name2out_id, pos) = out_id;
+//         // }
+//         // else {
+//         //   in_id = kh_val(seg_name2in_id, pos); out_id = kh_val(seg_name2out_id, pos);
+//         // }
 
-        // add edge
-        DAG->add_adj(seqs.size(), out_id, next_id, curPos++);
-        // abpoa_add_graph_edge(abg, out_id, next_id, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
-        if (in_id < out_id) {
-          for (i = 0; i < out_id - in_id; ++i)
-            DAG->add_adj(seqs.size(), in_id + i, in_id + i + 1, curPos++);
-          // abpoa_add_graph_edge(abg, in_id + i, in_id + i + 1, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
-        }
-        else if (in_id > out_id) err_fatal(__func__, "Error: in_id (%d) > out_id (%d).", in_id, out_id);
+//         // add edge
+//         DAG->add_adj(seqs.size(), out_id, next_id, curPos++);
+//         // abpoa_add_graph_edge(abg, out_id, next_id, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
+//         if (in_id < out_id) {
+//           for (i = 0; i < out_id - in_id; ++i)
+//             DAG->add_adj(seqs.size(), in_id + i, in_id + i + 1, curPos++);
+//           // abpoa_add_graph_edge(abg, in_id + i, in_id + i + 1, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
+//         }
+//         else if (in_id > out_id) err_fatal(__func__, "Error: in_id (%d) > out_id (%d).", in_id, out_id);
 
-        next_id = in_id;
-        start_s = end_s + 1;
-      }
-      else if (*end_s == '\0' || *end_s == '\t') break;
-    }
+//         next_id = in_id;
+//         start_s = end_s + 1;
+//       }
+//       else if (*end_s == '\0' || *end_s == '\t') break;
+//     }
 
-    if (is_rc) {
-      // abpoa_add_graph_edge(abg, ABPOA_SRC_NODE_ID, next_id, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
-      DAG->add_adj(seqs.size(), 0, next_id, curPos++);
-    }
-    else {
-      //abpoa_add_graph_edge(abg, last_id, ABPOA_SINK_NODE_ID, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
-      // std::cerr << start_s << " ";
-      seg_pos = kh_get(str, segs->h, start_s);
-      if (seg_pos == kh_end(segs->h)) err_fatal(__func__, "Error: seg (%s) not exist.", start_s);
-      seg_seq = segs->seq + kh_val(segs->h, seg_pos);
+//     if (is_rc) {
+//       // abpoa_add_graph_edge(abg, ABPOA_SRC_NODE_ID, next_id, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
+//       DAG->add_adj(seqs.size(), 0, next_id, curPos++);
+//     }
+//     else {
+//       //abpoa_add_graph_edge(abg, last_id, ABPOA_SINK_NODE_ID, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
+//       // std::cerr << start_s << " ";
+//       seg_pos = kh_get(str, segs->h, start_s);
+//       if (seg_pos == kh_end(segs->h)) err_fatal(__func__, "Error: seg (%s) not exist.", start_s);
+//       seg_seq = segs->seq + kh_val(segs->h, seg_pos);
 
-      // check if seg already exist
-      in_id = segs->start_id.a[kh_val(segs->h, seg_pos)];
-      out_id = segs->end_id.a[kh_val(segs->h, seg_pos)];
-      // DAG->add_adj(seqs.size(), last_id, in_id, curPos++);
-      path_node.push_back(in_id);
-      // std::cerr << last_id << " " << in_id << "\n";
-      // abpoa_add_graph_edge(abg, last_id, in_id, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
-      if (in_id < out_id) {
-        for (i = 0; i < out_id - in_id; ++i) {
-          // std::cerr << in_id + i << " " << in_id + i + 1 << "\n";
-          path_node.push_back(in_id + i + 1);
-          // DAG->add_adj(seqs.size(), in_id + i, in_id + i + 1, curPos++);
-        }
-      }
-      last_id = 0;
-      for (i = start_pos; i < end_pos; i++) {
-        DAG->add_adj(seqs.size(), last_id, path_node[i], curPos++);
-        last_id = path_node[i];
-      }
-      DAG->add_adj(seqs.size(), last_id, 1, curPos++);
-    }
-    // set abs
-    // abpoa_realloc_seq(abs);
-    seq_t tseq;
-    tseq.name = walk_name;
-    // abpoa_cpy_str(abs->name + abs->n_seq, walk_name, walk_name_len);
-    seqs.emplace_back(tseq);
-    // abs->is_rc[abs->n_seq] = is_rc; abs->n_seq++;
-  }
-  else err_fatal(__func__, "Error: no path in GFA path line (%s).", walk_name);
-  return 0;
-}
-std::vector<seq_t> read_gfa(para_t* para, graph* DAG, const char* path) {
+//       // check if seg already exist
+//       in_id = segs->start_id.a[kh_val(segs->h, seg_pos)];
+//       out_id = segs->end_id.a[kh_val(segs->h, seg_pos)];
+//       // DAG->add_adj(seqs.size(), last_id, in_id, curPos++);
+//       path_node.push_back(in_id);
+//       // std::cerr << last_id << " " << in_id << "\n";
+//       // abpoa_add_graph_edge(abg, last_id, in_id, 1, 1, add_read_id, 0, p_i, read_ids_n, p_n);
+//       if (in_id < out_id) {
+//         for (i = 0; i < out_id - in_id; ++i) {
+//           // std::cerr << in_id + i << " " << in_id + i + 1 << "\n";
+//           path_node.push_back(in_id + i + 1);
+//           // DAG->add_adj(seqs.size(), in_id + i, in_id + i + 1, curPos++);
+//         }
+//       }
+//       last_id = 0;
+//       for (i = start_pos; i < end_pos; i++) {
+//         DAG->add_adj(seqs.size(), last_id, path_node[i], curPos++);
+//         last_id = path_node[i];
+//       }
+//       DAG->add_adj(seqs.size(), last_id, 1, curPos++);
+//     }
+//     // set abs
+//     // abpoa_realloc_seq(abs);
+//     seq_t tseq;
+//     tseq.name = walk_name;
+//     // abpoa_cpy_str(abs->name + abs->n_seq, walk_name, walk_name_len);
+//     seqs.emplace_back(tseq);
+//     // abs->is_rc[abs->n_seq] = is_rc; abs->n_seq++;
+//   }
+//   else err_fatal(__func__, "Error: no path in GFA path line (%s).", walk_name);
+//   return 0;
+// }
+std::vector<seq_t> read_gfa(para_t *para, graph *DAG, const char *path, PathWriter * writer) {
   gzFile fp;
   kstring_t line = { 0,0,0 }, fa_seq = { 0,0,0 };
   kstream_t* ks;
@@ -481,7 +489,7 @@ std::vector<seq_t> read_gfa(para_t* para, graph* DAG, const char* path) {
     if (line.l < 3 || line.s[1] != '\t') continue; // empty line
     if (line.s[0] == 'S') ret = gfa_parse_S(para, DAG, segs, line.s);
     // else if (s.s[0] == 'L') ret = gfa_parse_L(g, s.s);
-    else if (line.s[0] == 'P') ret = gfa_parse_P(para, DAG, seqs, segs, line.s);
+    else if (line.s[0] == 'P') ret = gfa_parse_P(para, DAG, seqs, segs, line.s, writer);
     // else if (line.s[0] == 'W') ret = gfa_parse_W(para, DAG, seqs, segs, line.s);
     if (ret < 0)
       fprintf(stderr, "[E] invalid %c-line at line %ld (error code %d)\n", line.s[0], (long)lineno, ret);

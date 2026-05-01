@@ -18,9 +18,9 @@ struct graph {
   std::vector<int> hmin, hmax, tmin, tmax;  // index is rank  haid tail
   std::vector<int> hlen, tlen;  // index is rank  haid tail
   void init(para_t* para);
-  void init(para_t* para, int seq_id, const std::string& str);
+  void init(para_t *para, int seq_id, const std::string &str, PathWriter *writer);
   int add_node(para_t* para, char base);
-  void add_adj(int seq_id, int from, int to, int curPos);
+  void add_adj(int from, int to);
   void add_path(const para_t *para, int seq_id, const std::vector<res_t> &res, PathWriter *writer, int sink_id = -1);
   void topsort(const para_t* para, int op);
   void output_rc_msa(para_t* para, const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs);

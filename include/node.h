@@ -9,7 +9,7 @@ struct node_t {
   int ind; // in_degree
   std::vector<int> in, in_weight, out, out_weight;
   std::vector<int> aligned_node;
-  std::vector<int> ids; // restore the ord[rid]  msa
+  // std::vector<int> ids; // restore the ord[rid]  msa
   // std::vector<int> idp; // restore the ord[rid] pos  
   node_t();
   node_t(int _id, unsigned char _base, int m) {
@@ -19,7 +19,7 @@ struct node_t {
     aligned_node.resize(m, -1);
     aligned_node[base] = id;
   }
-  void add_in_adj(int seq_id, int from, int curPos) { // seq_id == ord
+  void add_in_adj(int from) { // seq_id == ord
     int ok = 0;
     ind++;
     for (size_t i = 0; i < in.size(); i++) {
@@ -33,13 +33,8 @@ struct node_t {
       in.emplace_back(from);
       in_weight.emplace_back(1);
     }
-    if (ids.empty() || ids.back() != seq_id) {
-      // std::cerr << seq_id << " " << (int)base << " " << base << " " << curPos << "\n";
-      ids.emplace_back(seq_id);
-      // idp.emplace_back(curPos);
-    }
   }
-  void add_out_adj(int seq_id, int to) {
+  void add_out_adj(int to) {
     int ok = 0;
     for (size_t i = 0; i < out.size(); i++) {
       if (to == out[i]) {
@@ -53,10 +48,6 @@ struct node_t {
       out_weight.emplace_back(1);
     }
     // if (seq_id == 2 && to == 14) std::cerr << id << " " << seq_id << "\n";
-    if (ids.empty() || ids.back() != seq_id) {
-      ids.emplace_back(seq_id);
-    }
-
   }
   // int getPos(int ord) const {
   //   size_t idx = std::lower_bound(ids.begin(), ids.end(), ord) - ids.begin();

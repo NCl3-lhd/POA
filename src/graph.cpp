@@ -10,13 +10,13 @@ int graph::add_node(para_t *para, char base) {
   node.emplace_back(node_t(node.size(), char26_table[base], para_m)); // src 0
   return id;
 }
-void graph::add_adj(int seq_id, int from, int to, int curPos) {
+void graph::add_adj(int from, int to) {
   // from and to node actually exist
   // std::cout << from << " " << to << "\n";
   if (from == to) return; // self loop is error
   // std::cerr << seq_id << " " << from << " " << to << " " << curPos << "\n";
-  node[from].add_out_adj(seq_id, to);
-  node[to].add_in_adj(seq_id, from, curPos);
+  node[from].add_out_adj(to);
+  node[to].add_in_adj(from);
 }
 void graph::topsort(const para_t *para, int op) { // if op == 1, is not normal topsort, the node_id in queue must be the parent
   std::vector<int> stk;
@@ -147,7 +147,7 @@ void graph::init(para_t *para) {
   // topsort(0, para_f);
 }
 
-void graph::init(para_t *para, int seq_id, const std::string &str) {
+void graph::init(para_t *para, int seq_id, const std::string &str, PathWriter *writer) {
   // 清空现有数据
   int para_m = para->m, para_f = para->f;
   if (node.empty()) {
@@ -159,13 +159,16 @@ void graph::init(para_t *para, int seq_id, const std::string &str) {
 
   int pre_id = 0;
   // std::cerr << " " << str.size() << "\n";
+  std::vector<int> path_node_ids;
   for (int i = 0; i < str.size(); i++) {
     int cur_id = node.size();
     node.emplace_back(node_t(cur_id, char26_table[str[i]], para_m)); // str[i]
-    add_adj(0, pre_id, cur_id, i);
+    add_adj(pre_id, cur_id);
+    path_node_ids.emplace_back(cur_id);
     pre_id = cur_id;
   }
-  add_adj(0, pre_id, 1, str.size()); // 
+  add_adj(pre_id, 1); // 
+  if (para->result) writer->write_path(seq_id, path_node_ids);
   topsort(para, 0);
 }
 void graph::add_path(const para_t *para, int seq_id, const std::vector<res_t> &res, PathWriter *writer, int sink_id) {
@@ -186,13 +189,13 @@ void graph::add_path(const para_t *para, int seq_id, const std::vector<res_t> &r
           node[res[i].aligned_id].aligned_node[res[i].base] = cur_id;
           node[cur_id].par_id = res[i].aligned_id;
           if (anchored_id != -1) {
-            add_adj(seq_id, anchored_id, cur_id, curPos++);
+            add_adj(anchored_id, cur_id);
           }
         }
         else {
           // std::cerr << 2 << "\n";
           cur_id = node[res[i].aligned_id].aligned_node[res[i].base];
-          if (anchored_id != -1) add_adj(seq_id, anchored_id, cur_id, curPos++);
+          if (anchored_id != -1) add_adj(anchored_id, cur_id);
         }
       }
       else {
@@ -218,7 +221,7 @@ void graph::add_path(const para_t *para, int seq_id, const std::vector<res_t> &r
         }
         if (anchored_id != -1) {
           // std::cerr << anchored_id << " " << char256_table[res[i].base] << "  " << cur_id << "\n";
-          add_adj(seq_id, anchored_id, cur_id, curPos++);
+          add_adj(anchored_id, cur_id);
         }
       }
       // std::cout << cur_id << " " << char256_table[res[i].base] << "  " << anchored_id << "\n";
@@ -229,14 +232,14 @@ void graph::add_path(const para_t *para, int seq_id, const std::vector<res_t> &r
       // std::cout << cur_id << " " << char256_table[res[i].base] << "  " << anchored_id << "\n";
       if (anchored_id != -1) {
         // std::cerr << anchored_id << " " << char256_table[res[i].base] << "  " << cur_id << "\n";
-        add_adj(seq_id, anchored_id, cur_id, curPos++);
+        add_adj(anchored_id, cur_id);
       }
     }
     anchored_id = cur_id;
     if (para->result && anchored_id >= 2) path_node_ids.emplace_back(anchored_id);
   }
   if (sink_id != -1) {
-    add_adj(seq_id, anchored_id, sink_id, curPos); // anchored -> sink
+    add_adj(anchored_id, sink_id); // anchored -> sink
   }
   is_topsorted = false;
 
