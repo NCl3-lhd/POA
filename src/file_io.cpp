@@ -503,6 +503,7 @@ std::vector<seq_t> read_gfa(para_t* para, graph* DAG, const char* path) {
 // ============================================================================
 
 PathWriter::PathWriter(const char *filename) {
+  unlink(filename);  // PathWrite clean
   fp_ = fopen(filename, "ab"); // Open in binary write mode
   if (!fp_) {
     fprintf(stderr, "[PathWriter] ERROR: Could not open file %s for writing.\n", filename);
@@ -539,8 +540,12 @@ bool PathWriter::write_path(uint32_t seq_id, const std::vector<int> &node_ids) {
 
   int last_node_id = 0;
   for (int current_node_id : node_ids) {
-    uint32_t delta = current_node_id - last_node_id;
-    write_varint(delta);
+    int32_t delta = current_node_id - last_node_id;
+
+    // 修复: 使用 ZigZag 编码将负数转为正数，避免 Varint 压缩失效占用 5 字节
+    uint32_t zigzag_delta = (delta << 1) ^ (delta >> 31);
+
+    write_varint(zigzag_delta);
     last_node_id = current_node_id;
   }
   return true;
@@ -567,31 +572,46 @@ PathReader::~PathReader() {
 bool PathReader::read_varint(uint32_t &value) {
   value = 0;
   int shift = 0;
-  unsigned char byte;
-  do {
-    if (fread(&byte, 1, 1, fp_) != 1) {
-      // This could be a clean EOF or an error
-      return false;
-    }
-    value |= (uint32_t)(byte & 0x7F) << shift;
+  int c;
+
+  // 修复: 使用 stdio 缓冲的 fgetc 替代单字节 fread，大幅提升读取性能
+  while ((c = fgetc(fp_)) != EOF) {
+    // 修复: 限制位移上限，防止恶意文件造成未定义行为和死循环
+    if (shift >= 35) return false;
+
+    value |= (uint32_t)(c & 0x7F) << shift;
     shift += 7;
-  } while (byte >= 0x80);
-  return true;
+
+    if ((c & 0x80) == 0) return true;
+  }
+  return false;
 }
 
 std::pair<uint32_t, std::vector<int>> PathReader::read_next_path() {
-  if (!fp_ || feof(fp_)) {
+  if (!fp_) {
     return { 0, {} };
   }
+
+  // 预先嗅探是否到了文件末尾，避免干净的 EOF 引发错误日志
+  int first_byte = fgetc(fp_);
+  if (first_byte == EOF) {
+    return { 0, {} };
+  }
+  ungetc(first_byte, fp_);
 
   // 1. Read Header
   uint32_t seq_id, path_len;
   if (fread(&seq_id, sizeof(uint32_t), 1, fp_) != 1) {
-    // This is likely the end of the file
     return { 0, {} };
   }
   if (fread(&path_len, sizeof(uint32_t), 1, fp_) != 1) {
     fprintf(stderr, "[PathReader] ERROR: Corrupted file - could not read path length.\n");
+    return { 0, {} };
+  }
+
+  // 修复: 增加 path_len 的安全上限防护，防止解析错误长度直接造成 OOM 崩溃
+  if (path_len > 100000000) {
+    fprintf(stderr, "[PathReader] ERROR: Path length exceeds safety limits.\n");
     return { 0, {} };
   }
 
@@ -601,11 +621,15 @@ std::pair<uint32_t, std::vector<int>> PathReader::read_next_path() {
   int last_node_id = 0;
 
   for (uint32_t i = 0; i < path_len; ++i) {
-    uint32_t delta;
-    if (!read_varint(delta)) {
+    uint32_t zigzag_delta;
+    if (!read_varint(zigzag_delta)) {
       fprintf(stderr, "[PathReader] ERROR: Corrupted file - could not read varint delta.\n");
       return { 0, {} }; // Return empty vector on error
     }
+
+    // 修复: ZigZag 解码，将无符号数还原为带符号的真实增量
+    int32_t delta = (zigzag_delta >> 1) ^ -(int32_t)(zigzag_delta & 1);
+
     int current_node_id = last_node_id + delta;
     node_ids.push_back(current_node_id);
     last_node_id = current_node_id;
@@ -613,4 +637,3 @@ std::pair<uint32_t, std::vector<int>> PathReader::read_next_path() {
 
   return { seq_id, node_ids };
 }
-

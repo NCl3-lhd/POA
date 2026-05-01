@@ -22,13 +22,14 @@ struct PathWriter {
   ~PathWriter();
 
   // Writes the path for a single sequence to the file.
-  // seq_ord: The order index of the sequence (0 to num_sequences - 1).
+  // seq_id: The index of the sequence (0 to num_sequences - 1).
   // node_ids: A vector of node IDs that the sequence traverses.
   // Note: The caller is responsible for ensuring node_ids are in the correct traversal order.
-  bool write_path(uint32_t seq_ord, const std::vector<int> &node_ids);
+  bool write_path(uint32_t seq_id, const std::vector<int> &node_ids);
 
   // Returns true if the writer was successfully opened.
   bool is_open() const { return fp_ != nullptr; }
+  void close() { if (fp_) { fclose(fp_); fp_ = nullptr; } }
 
   FILE *fp_;
 

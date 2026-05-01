@@ -135,6 +135,7 @@ int main(int argc, char** argv) {
     if (para->verbose >= 2) std::cerr << "topsort" << "\n";
     DAG->topsort(para, i + 1 == seqs.size());
   }
+  writer.close();
   // Timer::instance().start("output");
   if (para->verbose) std::cerr << "out_put" << "\n";
   if (para->result == 0) DAG->output_consensus();
@@ -142,10 +143,9 @@ int main(int argc, char** argv) {
   else if (para->result == 2) DAG->output_gfa(mm->rid_to_ord, seqs);
   // Timer::instance().stop("output");
   // Timer::instance().print();
-
-  unlink(tmp_path_file);  // PathWrite clean
-
+  
   // delete
+  unlink(tmp_path_file);
   delete[] mpool;
   mpool = nullptr;  // 防止后续误用
   delete para;
