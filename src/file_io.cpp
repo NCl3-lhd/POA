@@ -527,12 +527,12 @@ void PathWriter::write_varint(uint32_t value) {
   fwrite(buffer, 1, i, fp_);
 }
 
-bool PathWriter::write_path(uint32_t seq_id, const std::vector<int> &node_ids) {
+bool PathWriter::write_path(int32_t seq_id, const std::vector<int> &node_ids) {
   if (!fp_) return false;
 
   // 1. Write Header: Sequence Order and Path Length
   uint32_t path_len = node_ids.size();
-  if (fwrite(&seq_id, sizeof(uint32_t), 1, fp_) != 1) return false;
+  if (fwrite(&seq_id, sizeof(int32_t), 1, fp_) != 1) return false;
   if (fwrite(&path_len, sizeof(uint32_t), 1, fp_) != 1) return false;
 
   // 2. Write Body: Node ID Deltas
@@ -587,32 +587,32 @@ bool PathReader::read_varint(uint32_t &value) {
   return false;
 }
 
-std::pair<uint32_t, std::vector<int>> PathReader::read_next_path() {
+std::pair<int32_t, std::vector<int>> PathReader::read_next_path() {
   if (!fp_) {
-    return { 0, {} };
+    return { -1, {} };
   }
 
   // 预先嗅探是否到了文件末尾，避免干净的 EOF 引发错误日志
   int first_byte = fgetc(fp_);
   if (first_byte == EOF) {
-    return { 0, {} };
+    return { -1, {} };
   }
   ungetc(first_byte, fp_);
 
   // 1. Read Header
-  uint32_t seq_id, path_len;
-  if (fread(&seq_id, sizeof(uint32_t), 1, fp_) != 1) {
-    return { 0, {} };
+  int32_t seq_id; uint32_t path_len;
+  if (fread(&seq_id, sizeof(int32_t), 1, fp_) != 1) {
+    return { -1, {} };
   }
   if (fread(&path_len, sizeof(uint32_t), 1, fp_) != 1) {
     fprintf(stderr, "[PathReader] ERROR: Corrupted file - could not read path length.\n");
-    return { 0, {} };
+    return { seq_id, {} };
   }
 
   // 修复: 增加 path_len 的安全上限防护，防止解析错误长度直接造成 OOM 崩溃
   if (path_len > 100000000) {
     fprintf(stderr, "[PathReader] ERROR: Path length exceeds safety limits.\n");
-    return { 0, {} };
+    return { seq_id, {} };
   }
 
   // 2. Read Body
@@ -624,7 +624,7 @@ std::pair<uint32_t, std::vector<int>> PathReader::read_next_path() {
     uint32_t zigzag_delta;
     if (!read_varint(zigzag_delta)) {
       fprintf(stderr, "[PathReader] ERROR: Corrupted file - could not read varint delta.\n");
-      return { 0, {} }; // Return empty vector on error
+      return { seq_id, {} }; // Return empty vector on error
     }
 
     // 修复: ZigZag 解码，将无符号数还原为带符号的真实增量

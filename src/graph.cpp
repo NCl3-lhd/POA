@@ -267,7 +267,7 @@ void graph::output_rc_msa(para_t *para, const std::vector<int> &rid_to_ord, cons
   std::string row(rank.size() - 2, '-');
   while(1) {
     auto [seq_id, node_ids] = reader.read_next_path();
-    if (node_ids.empty()) break; // End of file check
+    if (seq_id == -1) break; // End of file check
     row.assign(rank.size() - 2, '-');
     for (int node_id : node_ids) {
       // Make sure node_id is valid

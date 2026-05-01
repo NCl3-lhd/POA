@@ -25,7 +25,7 @@ struct PathWriter {
   // seq_id: The index of the sequence (0 to num_sequences - 1).
   // node_ids: A vector of node IDs that the sequence traverses.
   // Note: The caller is responsible for ensuring node_ids are in the correct traversal order.
-  bool write_path(uint32_t seq_id, const std::vector<int> &node_ids);
+  bool write_path(int32_t seq_id, const std::vector<int> &node_ids);
 
   // Returns true if the writer was successfully opened.
   bool is_open() const { return fp_ != nullptr; }
@@ -44,7 +44,7 @@ struct PathReader {
   // Reads the path for the next sequence in the file.
   // Returns a pair containing the sequence order and its path of node IDs.
   // If end-of-file is reached or an error occurs, the vector will be empty.
-  std::pair<uint32_t, std::vector<int>> read_next_path();
+  std::pair<int32_t, std::vector<int>> read_next_path();
 
   // Returns true if the reader was successfully opened.
   bool is_open() const { return fp_ != nullptr; }
