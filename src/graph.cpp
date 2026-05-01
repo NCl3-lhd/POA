@@ -240,7 +240,7 @@ void graph::add_path(const para_t *para, int seq_id, const std::vector<res_t> &r
   }
   is_topsorted = false;
 
-  writer->write_path(seq_id, path_node_ids);
+  if(para->result) writer->write_path(seq_id, path_node_ids);
   // std::cerr << "finish add path" << "\n";
 }
 
@@ -476,9 +476,9 @@ void graph::output_gfa(const std::vector<int> &rid_to_ord, const std::vector<seq
     int seq_id = ret.first;
     std::vector<int> node_ids = ret.second;
     if (seq_id == -1) break; // End of file check
-    std::cout << "P\t" << seqs[seq_id].name << "+";
+    std::cout << "P\t" << seqs[seq_id].name << "\t";
     for (i = 0; i < node_ids.size(); i++) {
-      std::cout << node_ids[i] - 1<< "\t";
+      std::cout << node_ids[i] - 1<< "+";
       if (i < int(node_ids.size()) - 1) {
         // fprintf(out_fp, ",");
         std::cout << ",";
