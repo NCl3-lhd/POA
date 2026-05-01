@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
     if (para->verbose >= 2) std::cerr << "aligment" << "\n";
     std::vector<res_t> res = alignment(para, DAG, mm, rid, seqs[rid].seq.c_str(), seqs[rid].seq.size(), mpool);
     if (para->verbose >= 2) std::cerr << "add path" << "\n";
-    DAG->add_path(para->m, i, res, 1);
+    DAG->add_path(para->m, rid, res, 1);
     if (para->verbose >= 2) std::cerr << "topsort" << "\n";
     DAG->topsort(para, i + 1 == seqs.size());
   }
@@ -140,6 +140,8 @@ int main(int argc, char** argv) {
   else if (para->result == 2) DAG->output_gfa(mm->rid_to_ord, seqs);
   // Timer::instance().stop("output");
   // Timer::instance().print();
+  unlink(tmp_path_file);
+  
   // delete
   delete[] mpool;
   mpool = nullptr;  // 防止后续误用

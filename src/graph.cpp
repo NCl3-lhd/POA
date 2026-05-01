@@ -2,9 +2,9 @@
 #include "sequence.h"
 #include <queue>
 #include <algorithm>
-
+#include "file_io.h"
 extern char char26_table[256];
-int graph::add_node(para_t* para, char base) {
+int graph::add_node(para_t *para, char base) {
   int para_m = para->m;
   int id = node.size();
   node.emplace_back(node_t(node.size(), char26_table[base], para_m)); // src 0
@@ -18,7 +18,7 @@ void graph::add_adj(int seq_id, int from, int to, int curPos) {
   node[from].add_out_adj(seq_id, to);
   node[to].add_in_adj(seq_id, from, curPos);
 }
-void graph::topsort(const para_t* para, int op) { // if op == 1, is not normal topsort, the node_id in queue must be the parent
+void graph::topsort(const para_t *para, int op) { // if op == 1, is not normal topsort, the node_id in queue must be the parent
   std::vector<int> stk;
   std::vector<int> deg(node.size());
   if (op == 1) {
@@ -39,12 +39,12 @@ void graph::topsort(const para_t* para, int op) { // if op == 1, is not normal t
       int u = stk.back();
       // std::cout << u << "\n";
       stk.pop_back();
-      node_t& cur = node[u];
+      node_t &cur = node[u];
       cur.rank = rank.size();
       rank.emplace_back(u);
       for (int i = 0; i < cur.aligned_node.size(); i++) {
         if (cur.aligned_node[i] < 0) continue;
-        node_t& son = node[cur.aligned_node[i]];
+        node_t &son = node[cur.aligned_node[i]];
         son.rank = cur.rank;
         for (int j = 0; j < son.out.size(); j++) {
           int v = node[son.out[j]].par_id;
@@ -69,7 +69,7 @@ void graph::topsort(const para_t* para, int op) { // if op == 1, is not normal t
   while (stk.size()) {
     int u = stk.back();
     stk.pop_back();
-    node_t& cur = node[u];
+    node_t &cur = node[u];
     // std::cerr << u << " ";
     cur.rank = rank.size();
     rank.emplace_back(u);
@@ -85,7 +85,7 @@ void graph::topsort(const para_t* para, int op) { // if op == 1, is not normal t
   //   std::cerr << rank[i] << " ";
   // }
   // std::cerr << rank.size() << " " << node.size() << "\n";
-  
+
   // if (para->f > 0) {
   //   hlen.resize(node.size());
   //   for (int i = 0; i < rank.size(); i++) { // ni topsort id dp
@@ -127,7 +127,7 @@ void graph::topsort(const para_t* para, int op) { // if op == 1, is not normal t
 
   if (para->enable_seeding) build_consensus();
 }
-void graph::init(para_t* para) {
+void graph::init(para_t *para) {
   // 清空现有数据
   int para_m = para->m, para_f = para->f;
   node.clear();
@@ -147,7 +147,7 @@ void graph::init(para_t* para) {
   // topsort(0, para_f);
 }
 
-void graph::init(para_t* para, int seq_id, const std::string& str) {
+void graph::init(para_t *para, int seq_id, const std::string &str) {
   // 清空现有数据
   int para_m = para->m, para_f = para->f;
   if (node.empty()) {
@@ -168,11 +168,12 @@ void graph::init(para_t* para, int seq_id, const std::string& str) {
   add_adj(0, pre_id, 1, str.size()); // 
   topsort(para, 0);
 }
-void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int sink_id) {
+void graph::add_path(int para_m, int seq_id, const std::vector<res_t> &res, int sink_id) {
   // node_h.emplace_back(node.size());
   int anchored_id = -1; // sink
   // std::cerr << seq_id << " " << res.size() << "\n";
   int curPos = 0;
+  std::vector<int> path_node_ids;
   for (int i = 0; i < res.size(); i++) {
     int cur_id = res[i].from;
     if (cur_id < 0) {
@@ -183,7 +184,9 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
           node.emplace_back(node_t(cur_id, res[i].base, para_m));
           node[res[i].aligned_id].aligned_node[res[i].base] = cur_id;
           node[cur_id].par_id = res[i].aligned_id;
-          if (anchored_id != -1) add_adj(seq_id, anchored_id, cur_id, curPos++);
+          if (anchored_id != -1) {
+            add_adj(seq_id, anchored_id, cur_id, curPos++);
+          }
         }
         else {
           // std::cerr << 2 << "\n";
@@ -228,26 +231,55 @@ void graph::add_path(int para_m, int seq_id, const std::vector<res_t>& res, int 
         add_adj(seq_id, anchored_id, cur_id, curPos++);
       }
     }
+    if (anchored_id >= 2) path_node_ids.emplace_back(anchored_id);
     anchored_id = cur_id;
   }
-  if(sink_id != -1) add_adj(seq_id, anchored_id, sink_id, curPos); // anchored -> sink
+  if (sink_id != -1) {
+    add_adj(seq_id, anchored_id, sink_id, curPos); // anchored -> sink
+    if (sink_id >= 2) path_node_ids.emplace_back(sink_id);
+  }
   is_topsorted = false;
+
+  PathWriter writer(tmp_path_file);
+  writer.write_path(seq_id, path_node_ids);
   // std::cerr << "finish add path" << "\n";
 }
 
-void graph::output_rc_msa(para_t* para, const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs) {
+void graph::output_rc_msa(para_t *para, const std::vector<int> &rid_to_ord, const std::vector<seq_t> &seqs) {
   if (is_topsorted == false) topsort(para, 1);
-  std::vector<std::string> res(seqs.size(), std::string(rank.size() - 2, '-'));
-  for (int i = 2; i < node.size(); i++) {
-    int rk = node[node[i].par_id].rank;
-    for (int id : node[i].ids) {
-      res[id][rk - 1] = char256_table[node[i].base];
-    }
+  // std::vector<std::string> res(seqs.size(), std::string(rank.size() - 2, '-'));
+  // for (int i = 2; i < node.size(); i++) {
+  //   int rk = node[node[i].par_id].rank;
+  //   for (int id : node[i].ids) {
+  //     res[id][rk - 1] = char256_table[node[i].base];
+  //   }
+  // }
+  // for (int i = 0; i < seqs.size(); i++) {
+  //   if (seqs[i].name.empty()) std::cout << ">" << i + 1 << "\n";
+  //   else std::cout << ">" << seqs[i].name << " " << seqs[i].comment << "\n";
+  //   std::cout << res[rid_to_ord[i]] << "\n";
+  // }
+
+  PathReader reader(tmp_path_file);
+  if (!reader.is_open()) {
+    // Handle error
+    std::cerr << "read file: " << tmp_path_file << "error" << "\n";
+    return;
   }
-  for (int i = 0; i < seqs.size(); i++) {
-    if (seqs[i].name.empty()) std::cout << ">" << i + 1 << "\n";
-    else std::cout << ">" << seqs[i].name << " " << seqs[i].comment << "\n";
-    std::cout << res[rid_to_ord[i]] << "\n";
+  std::string row(rank.size() - 2, '-');
+  while(1) {
+    auto [seq_id, node_ids] = reader.read_next_path();
+    if (node_ids.empty()) break; // End of file check
+    row.assign(rank.size() - 2, '-');
+    for (int node_id : node_ids) {
+      // Make sure node_id is valid
+      if (node_id < node.size()) {
+        int rk = node[node[node_id].par_id].rank;
+        row[rk - 1] = char256_table[node[node_id].base];
+      }
+    }
+    std::cout << ">" << seqs[seq_id].name << " " << seqs[seq_id].comment << "\n";
+    std::cout << row << "\n";
   }
 }
 
@@ -263,7 +295,7 @@ std::vector<int> graph::calculateR() const {
   while (q.size()) {
     int u = q.front();
     q.pop();
-    const node_t& cur = node[u];
+    const node_t &cur = node[u];
     if (u == 1) {
       R[cur.rank] = -1;
     }
@@ -305,7 +337,7 @@ void graph::build_consensus(bool needCoverages) {
   while (q.size()) {
     int u = q.front();
     q.pop();
-    const node_t& cur = node[u];
+    const node_t &cur = node[u];
     if (u != 0) {
       int wmax = -1, max_pre = -1;
       for (int k = 0; k < cur.in.size(); k++) {
@@ -333,7 +365,7 @@ void graph::build_consensus(bool needCoverages) {
   cons.clear();cons_pos_to_id.clear();
   int node_id = pre[1];
   while (node_id != 0) {
-    const node_t & cur = node[node_id];
+    const node_t &cur = node[node_id];
     cons += char256_table[cur.base];
     cons_pos_to_id.push_back(cur.id);
     int in_w = 0, out_w = 0;
@@ -356,7 +388,7 @@ void graph::output_consensus(bool needCoverages) {
   std::cout << cons << "\n";
   return;
 }
-void graph::output_gfa(const std::vector<int>& rid_to_ord, const std::vector<seq_t>& seqs) {
+void graph::output_gfa(const std::vector<int> &rid_to_ord, const std::vector<seq_t> &seqs) {
   if (node.size() <= 2) return;
 
   // traverse graph 

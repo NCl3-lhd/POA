@@ -1,7 +1,7 @@
 #include <zlib.h>
 #include <stdexcept> 
 #include <stdint.h>
-#include "handle_input.h"
+#include "file_io.h"
 #include "kseq.h"
 #include "sequence.h" 
 #include "utils.h"
@@ -497,3 +497,120 @@ std::vector<seq_t> read_gfa(para_t* para, graph* DAG, const char* path) {
   gzclose(fp);
   return seqs;
 }
+
+// ============================================================================
+// PathWriter Implementation
+// ============================================================================
+
+PathWriter::PathWriter(const char *filename) {
+  fp_ = fopen(filename, "ab"); // Open in binary write mode
+  if (!fp_) {
+    fprintf(stderr, "[PathWriter] ERROR: Could not open file %s for writing.\n", filename);
+  }
+}
+
+PathWriter::~PathWriter() {
+  if (fp_) {
+    fclose(fp_);
+  }
+}
+
+void PathWriter::write_varint(uint32_t value) {
+  unsigned char buffer[5];
+  int i = 0;
+  while (value >= 0x80) {
+    buffer[i++] = (value & 0x7F) | 0x80;
+    value >>= 7;
+  }
+  buffer[i++] = value;
+  fwrite(buffer, 1, i, fp_);
+}
+
+bool PathWriter::write_path(uint32_t seq_id, const std::vector<int> &node_ids) {
+  if (!fp_) return false;
+
+  // 1. Write Header: Sequence Order and Path Length
+  uint32_t path_len = node_ids.size();
+  if (fwrite(&seq_id, sizeof(uint32_t), 1, fp_) != 1) return false;
+  if (fwrite(&path_len, sizeof(uint32_t), 1, fp_) != 1) return false;
+
+  // 2. Write Body: Node ID Deltas
+  if (path_len == 0) return true;
+
+  int last_node_id = 0;
+  for (int current_node_id : node_ids) {
+    uint32_t delta = current_node_id - last_node_id;
+    write_varint(delta);
+    last_node_id = current_node_id;
+  }
+  return true;
+}
+
+
+// ============================================================================
+// PathReader Implementation
+// ============================================================================
+
+PathReader::PathReader(const char *filename) {
+  fp_ = fopen(filename, "rb"); // Open in binary read mode
+  if (!fp_) {
+    fprintf(stderr, "[PathReader] ERROR: Could not open file %s for reading.\n", filename);
+  }
+}
+
+PathReader::~PathReader() {
+  if (fp_) {
+    fclose(fp_);
+  }
+}
+
+bool PathReader::read_varint(uint32_t &value) {
+  value = 0;
+  int shift = 0;
+  unsigned char byte;
+  do {
+    if (fread(&byte, 1, 1, fp_) != 1) {
+      // This could be a clean EOF or an error
+      return false;
+    }
+    value |= (uint32_t)(byte & 0x7F) << shift;
+    shift += 7;
+  } while (byte >= 0x80);
+  return true;
+}
+
+std::pair<uint32_t, std::vector<int>> PathReader::read_next_path() {
+  if (!fp_ || feof(fp_)) {
+    return { 0, {} };
+  }
+
+  // 1. Read Header
+  uint32_t seq_id, path_len;
+  if (fread(&seq_id, sizeof(uint32_t), 1, fp_) != 1) {
+    // This is likely the end of the file
+    return { 0, {} };
+  }
+  if (fread(&path_len, sizeof(uint32_t), 1, fp_) != 1) {
+    fprintf(stderr, "[PathReader] ERROR: Corrupted file - could not read path length.\n");
+    return { 0, {} };
+  }
+
+  // 2. Read Body
+  std::vector<int> node_ids;
+  node_ids.reserve(path_len);
+  int last_node_id = 0;
+
+  for (uint32_t i = 0; i < path_len; ++i) {
+    uint32_t delta;
+    if (!read_varint(delta)) {
+      fprintf(stderr, "[PathReader] ERROR: Corrupted file - could not read varint delta.\n");
+      return { 0, {} }; // Return empty vector on error
+    }
+    int current_node_id = last_node_id + delta;
+    node_ids.push_back(current_node_id);
+    last_node_id = current_node_id;
+  }
+
+  return { seq_id, node_ids };
+}
+

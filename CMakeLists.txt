@@ -1,42 +1,42 @@
 cmake_minimum_required(VERSION 3.9)
 
-project(minipoa VERSION 1.0.0 
-                LANGUAGES C CXX 
-                DESCRIPTION "Spoa is a c++ library (and tool) for SIMD vectorized partial order alignment.")
-             
+project(minipoa VERSION 1.0.0
+    LANGUAGES C CXX
+    DESCRIPTION "Spoa is a c++ library (and tool) for SIMD vectorized partial order alignment.")
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 11)
 
 # 要求必须支持指定的C++标准
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # 禁用编译器特定的扩展，只使用标准C++
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # 设置默认构建类型为Release（自动包含-O3）
 # 放在project()之后，任何目标定义之前
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release)
+    set(CMAKE_BUILD_TYPE Release)
 endif()
 
 # ============================================================
 # SIMD options (user selectable)
 # ============================================================
-
 option(ENABLE_AVX512 "Enable AVX-512 backend" OFF)
-option(ENABLE_AVX2   "Enable AVX2 backend"   ON)
-option(ENABLE_SSE2   "Enable SSE2 backend"   OFF)
+option(ENABLE_AVX2 "Enable AVX2 backend" ON)
+option(ENABLE_SSE2 "Enable SSE2 backend" OFF)
 
-if (ENABLE_AVX512)
+if(ENABLE_AVX512)
     message(STATUS "SIMD backend: AVX-512")
     add_compile_options(-mavx512f -mavx512bw)
     add_compile_definitions(ENABLE_AVX512)
 
-elseif (ENABLE_AVX2)
+elseif(ENABLE_AVX2)
     message(STATUS "SIMD backend: AVX2")
     add_compile_options(-mavx2)
     add_compile_definitions(ENABLE_AVX2)
 
-elseif (ENABLE_SSE2)
+elseif(ENABLE_SSE2)
     message(STATUS "SIMD backend: SSE4.1")
     add_compile_options(-msse4.1)
     add_compile_definitions(ENABLE_SSE2)
@@ -49,8 +49,10 @@ include(GNUInstallDirs)
 
 # 设置静态库输出目录为项目二进制目录下的lib文件夹
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
+
 # 设置动态库输出目录为项目二进制目录下的lib文件夹
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
+
 # 设置可执行文件输出目录为项目二进制目录下的bin文件夹
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
@@ -78,17 +80,17 @@ endif()
 # 查找 src 目录下的所有 .cpp 文件
 file(GLOB SOURCES "src/*.cpp" "src/*.c")
 
-add_library(${PROJECT_NAME} 
-  src/align.cpp
-  src/graph.cpp
-  src/handle_input.cpp
-  src/kalloc.c
-  src/kstring.c
-  src/lchain.cpp
-  src/mem_alloc_utils.cpp
-  src/minimizer.cpp
-  src/sequence.cpp
-  src/utils.c)
+add_library(${PROJECT_NAME}
+    src/align.cpp
+    src/graph.cpp
+    src/file_io.cpp
+    src/kalloc.c
+    src/kstring.c
+    src/lchain.cpp
+    src/mem_alloc_utils.cpp
+    src/minimizer.cpp
+    src/sequence.cpp
+    src/utils.c)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE ZLIB::ZLIB)
 target_link_libraries(${PROJECT_NAME} PRIVATE OpenMP::OpenMP_CXX)
@@ -102,7 +104,6 @@ set_target_properties(${PROJECT_NAME}_bin PROPERTIES OUTPUT_NAME ${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
-                        
 
 # 安装 minipoa 库文件到库目录
 # 安装库目标，并指定要导出
@@ -111,17 +112,15 @@ install(TARGETS ${PROJECT_NAME}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
-# 安装 minipoa_bin 可执行文件到二进制目录  
+# 安装 minipoa_bin 可执行文件到二进制目录
 install(TARGETS ${PROJECT_NAME}_bin DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # 安装头文件到包含目录（使用项目名作为子目录避免冲突）
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ 
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
-
 
 # 导出配置（可选，便于其他CMake项目使用）
 install(EXPORT ${PROJECT_NAME}Targets
     FILE ${PROJECT_NAME}Targets.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
-
