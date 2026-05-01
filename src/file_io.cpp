@@ -243,7 +243,6 @@ int gfa_parse_P(para_t *para, graph *DAG, std::vector<seq_t> &seqs, seg_seq_t *s
         if (in_id < out_id) {
           for (i = 0; i < out_id - in_id; ++i) {
             DAG->add_adj(in_id + i, in_id + i + 1);
-            path_node_ids.emplace_back(in_id + i);
           }
           for (i = out_id; i >= in_id; --i) {
             path_node_ids.emplace_back(i);
