@@ -1,12 +1,19 @@
 #include <zlib.h>
 #include <stdexcept> 
 #include <stdint.h>
+#include <unistd.h>
 #include "file_io.h"
 #include "kseq.h"
 #include "sequence.h" 
 #include "utils.h"
 #include <stdlib.h>
 #include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <cctype>
+#include <string>
+
+constexpr int INF = 0x3f3f3f3f; // 0x3f3f3f3f
 
 KSEQ_INIT(gzFile, gzread)
 
@@ -52,8 +59,8 @@ void initPara(para_t* para) {
   if (para->mismatch > 0) para->mismatch *= -1;
   if (para->gap_open1 > 0) para->gap_open1 *= -1;
   if (para->gap_ext1 > 0) para->gap_ext1 *= -1;
-  para->m = 5; // default m = Nucleotide num
   if (para->mat_fp.empty()) {
+    para->m = 5; // default m = Nucleotide num
     int m = para->m;
     para->mat.resize(m * m, 0); //like HOXD70.mtx
     for (int i = 0; i < m - 1; i++) {
@@ -63,8 +70,52 @@ void initPara(para_t* para) {
     }
     para->mat[(m - 1) * m + m - 1] = para->match;
   }
-  else { // 待支持 
-
+  else {
+    std::ifstream mtx_file(para->mat_fp);
+    if (!mtx_file.is_open()) {
+      throw std::runtime_error("Error opening matrix file " + para->mat_fp);
+    }
+    std::string line;
+    while (std::getline(mtx_file, line) && (!line.empty() && line[0] == '#')) {}
+    if (line.empty()) {
+      throw std::runtime_error("Matrix file " + para->mat_fp + " has no header line");
+    }
+    std::istringstream header(line);
+    std::vector<char> alphabet;
+    std::string token;
+    while (header >> token) {
+      if (token.size() == 1) alphabet.push_back(token[0]);
+    }
+    int m = alphabet.size();
+    if (m == 0) {
+      throw std::runtime_error("Matrix file " + para->mat_fp + " header is empty");
+    }
+    para->m = m;
+    std::vector<int> col_to_idx(m);
+    for (int i = 0; i < m; i++) {
+      unsigned char c = alphabet[i];
+      col_to_idx[i] = m > 5 ? aa26_table[c] : nt4_table[c];
+    }
+    para->mat.resize(m * m, 0);
+    while (std::getline(mtx_file, line)) {
+      if (line.empty() || line[0] == '#') continue;
+      std::istringstream data(line);
+      std::string row_label;
+      if (!(data >> row_label)) continue;
+      if (row_label.size() != 1) {
+        throw std::runtime_error("Invalid row label in matrix file " + para->mat_fp + ": " + row_label);
+      }
+      unsigned char row_char = row_label[0];
+      int row_idx = m > 5 ? aa26_table[row_char] : nt4_table[row_char];
+      int score;
+      for (int j = 0; j < m; j++) {
+        if (!(data >> score)) {
+          throw std::runtime_error("Not enough columns in matrix file " + para->mat_fp + " row " + row_label);
+        }
+        para->mat[row_idx * m + col_to_idx[j]] = score;
+      }
+    }
+    mtx_file.close();
   }
   if (para->m > 5) { // for aa sequence
     for (int i = 0; i < 256; ++i) {

@@ -20,11 +20,27 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # ============================================================
-# SIMD options (user selectable)
+# SIMD options (user selectable; auto-detect if none specified)
 # ============================================================
 option(ENABLE_AVX512 "Enable AVX-512 backend" OFF)
-option(ENABLE_AVX2 "Enable AVX2 backend" ON)
-option(ENABLE_SSE2 "Enable SSE2 backend" OFF)
+option(ENABLE_AVX2    "Enable AVX2 backend"     OFF)
+option(ENABLE_SSE2    "Enable SSE2 backend"     OFF)
+
+if(ENABLE_AVX512 OR ENABLE_AVX2 OR ENABLE_SSE2)
+  # user explicitly chose a backend
+else()
+  include(CheckCXXCompilerFlag)
+  check_cxx_compiler_flag("-mavx2"   COMPILER_SUPPORTS_AVX2)
+  check_cxx_compiler_flag("-msse4.1" COMPILER_SUPPORTS_SSE41)
+
+  if(COMPILER_SUPPORTS_AVX2)
+    set(ENABLE_AVX2 ON)
+  elseif(COMPILER_SUPPORTS_SSE41)
+    set(ENABLE_SSE2 ON)
+  else()
+    message(FATAL_ERROR "Compiler does not support AVX2 or SSE4.1")
+  endif()
+endif()
 
 if(ENABLE_AVX512)
     message(STATUS "SIMD backend: AVX-512")

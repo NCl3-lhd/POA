@@ -32,6 +32,7 @@ struct graph {
   std::string cons;
   std::vector<int> cons_pos_to_id;
   std::vector<int> coverages;
+  std::string tmp_path;
 };
 // std::vector<sequence> readFile(const char* path);
 #endif

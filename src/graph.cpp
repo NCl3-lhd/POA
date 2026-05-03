@@ -262,10 +262,10 @@ void graph::output_rc_msa(para_t *para, const std::vector<int> &rid_to_ord, cons
   //   std::cout << res[rid_to_ord[i]] << "\n";
   // }
 
-  PathReader reader(tmp_path_file);
+  PathReader reader(tmp_path.c_str());
   if (!reader.is_open()) {
     // Handle error
-    std::cerr << "read file: " << tmp_path_file << "error" << "\n";
+    std::cerr << "read file: " << tmp_path << "error" << "\n";
     return;
   }
   std::string row(rank.size() - 2, '-');
@@ -468,10 +468,10 @@ void graph::output_gfa(const std::vector<int> &rid_to_ord, const std::vector<seq
   //     }
   //   }
   // }
-  PathReader reader(tmp_path_file);
+  PathReader reader(tmp_path.c_str());
   if (!reader.is_open()) {
     // Handle error
-    std::cerr << "read file: " << tmp_path_file << "error" << "\n";
+    std::cerr << "read file: " << tmp_path << "error" << "\n";
     return;
   }
   while (1) {

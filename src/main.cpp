@@ -1,6 +1,8 @@
 #include <iostream>
 #include <algorithm>
 #include <numeric>
+#include <unistd.h>
+#include <string>
 #include "cxxopts.hpp"
 #include "minipoa.h"
 #include <omp.h>
@@ -14,7 +16,7 @@ int main(int argc, char** argv) {
   options.add_options()
     ("input", "input path", cxxopts::value<std::string>())
     ("i,inc_fp", "incrementally align sequences to an existing graph", cxxopts::value<std::string>())
-    ("m,mat_fp", "match file path (Undeveloped)", cxxopts::value<std::string>())
+    ("m,mat_fp", "scoring matrix file path (requirement: N-N match score > N-other base score)", cxxopts::value<std::string>())
     ("M,match", "match sorce", cxxopts::value<int>()->default_value("2"))
     ("X,mismatch", "mismatch sorce", cxxopts::value<int>()->default_value("-4"))
     ("O,gap_open", "gap_open sorce", cxxopts::value<int>()->default_value("-4"))
@@ -46,7 +48,7 @@ int main(int argc, char** argv) {
       return 0;
     }
     if (result.count("version")) {
-      std::cout << "minipoa version 1.4.1" << std::endl;
+      std::cout << "minipoa version 1.4.2" << std::endl;
       return 0;
     }
     if (result.count("input") == 0) {
@@ -95,7 +97,9 @@ int main(int argc, char** argv) {
   std::vector<seq_t> seqs;
   graph* DAG = new graph();
   DAG->init(para);
-  PathWriter *writer = para->result ? new PathWriter(tmp_path_file) : nullptr;
+  std::string tmp_path = "minipoa_paths_" + std::to_string(getpid()) + ".tmp";
+  DAG->tmp_path = tmp_path;
+  PathWriter *writer = para->result ? new PathWriter(tmp_path.c_str()) : nullptr;
 
   if (!para->inc_fp.empty()) seqs = read_gfa(para, DAG, para->inc_fp.c_str(), writer);
   
@@ -147,7 +151,7 @@ int main(int argc, char** argv) {
   // Timer::instance().print();
   
   // delete
-  if (para->result) unlink(tmp_path_file);
+  if (para->result) unlink(tmp_path.c_str());
   delete writer;
   writer = nullptr;
   delete[] mpool;

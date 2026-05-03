@@ -17,29 +17,28 @@ Or, make from source
 # Git clone this repository
 git clone https://github.com/NCl3-lhd/minipoa.git
 cd minipoa && mkdir build && cd build
-# AVX2(default)
-cmake -DENABLE_AVX2=ON -DENABLE_AVX512=OFF -DENABLE_SSE2=OFF .. && make
-# AVX512
-cmake -DENABLE_AVX512=ON -DENABLE_AVX2=OFF -DENABLE_SSE2=OFF .. && make
-# SSE2
-cmake -DENABLE_SSE2=ON -DENABLE_AVX2=OFF -DENABLE_AVX512=OFF .. && make
+# Auto-detect SIMD (prefers AVX2, falls back to SSE)
+cmake .. && make
+# Or specify a backend explicitly:
+cmake -DENABLE_AVX512=ON .. && make
+cmake -DENABLE_SSE2=ON .. && make
 ```
 
 ## Quick start
 
 Generate a consensus sequence (Sequencing mode):
 ```bash
-minipoa data/mtDNA.fasta > cons.fasta
+minipoa test/mtDNA.fasta > cons.fasta
 ```
 
 Perform multiple sequence alignment (MSA mode):
 ```bash
-minipoa data/mtDNA.fasta -S -r1 -t thread > mtDNA.fasta 
+minipoa test/mtDNA.fasta -S -r1 -t thread > mtDNA.fasta 
 ```
 
 Output the sequence graph in GFA format:
 ```bash
-minipoa data/mtDNA.fasta -S -r2 -t thread > mtDNA.gfa
+minipoa test/mtDNA.fasta -S -r2 -t thread > mtDNA.gfa
 ```
 
 View the full list of parameters:
@@ -69,6 +68,14 @@ You can customize the dynamic programming scoring scheme using the following par
 ```bash
 minipoa input.fasta -M 2 -X -4 -O -4 -E -2 > output.fasta
 ```
+Alternatively, you can load a full substitution matrix from an `.mtx` file:
+* `-m` : Path to a scoring matrix file in `.mtx` format (supports both nucleotide and amino acid matrices)
+```bash
+# Use HOXD70 nucleotide substitution matrix
+minipoa input.fasta -m test/HOXD70.mtx -O -105 -E -12 > output.fasta
+```
+The `.mtx` file format is a tab/space-delimited text file. The first non-comment line (not starting with `#`) defines the alphabet as column headers, and each subsequent line provides the row character followed by scores. See `test/HOXD70.mtx` for an example.
+
 ### Banding Strategy Control
 
 `-B` : Enable the adaptive band strategy (static banding is enabled by default).
