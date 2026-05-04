@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
     return 1;
   }
   if (para->isRNA) char256_table[3] = 'U';
-  if (seqs.size() < 5000) para->progressive_poa |= 1;
+  // if (seqs.size() < 5000) para->progressive_poa |= 1;
 
   if (para->verbose && para->enable_seeding) std::cerr << "collect minimizer" << "\n";
   minimizer_t *mm = new minimizer_t(para, seqs);
