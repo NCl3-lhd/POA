@@ -266,12 +266,12 @@ inline int get_local_chain_score(int end_tpos_j, int end_qpos_j, int start_ancho
 // local chains:
 //   x: strand | end_tpos | end_qpos
 //   y: start_anchor_i | end_anchor_i   [start_anchor_i, end_anchor_i)
-int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int min_w, int tlen, int qlen, int max_dist_x, int max_dist_y, int bw, float chn_pen_gap, float chn_pen_skip, int is_cdna, int n_seg) {
+int chain_dp(void *km, mm128_t *lchains, int n_lchains, mm128_v *_anchors, int min_w, int tlen, int qlen, int max_dist_x, int max_dist_y, int bw, float chn_pen_gap, float chn_pen_skip, int is_cdna, int n_seg) {
   size_t n = _anchors->n;
 
-  mm128_t* a = _anchors->a;
-  int32_t* f = Kmalloc(km, int32_t, n);
-  int* chain_score = Kmalloc(km, int, n_lchains), * pre_chain = Kmalloc(km, int, n_lchains);
+  mm128_t *a = _anchors->a;
+  int32_t *f = Kmalloc(km, int32_t, n);
+  int *chain_score = Kmalloc(km, int, n_lchains), *pre_chain = Kmalloc(km, int, n_lchains);
   int global_max_score = -INF, global_max_i = -1;
   for (int i = 0, st = 0; i < n_lchains; i++) {
     uint64_t xi = lchains[i].x, yi = lchains[i].y;
@@ -330,25 +330,21 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
 
     int pre_end_tpos = (pre_x >> 32) & 0x7fffffff, pre_end_qpos = (int32_t)pre_x;
 
-    bool first_in_chain = true;
     while (i >= 0) {
       int cur_tpos = a[i].x, cur_qpos = (int32_t)a[i].y;
 
       if (cur_tpos > pre_end_tpos && cur_qpos > pre_end_qpos) {
         filter_num++;
         int dt = last_tpos - cur_tpos, dq = last_qpos - cur_qpos;
-        if (first_in_chain || (dt >= min_w && dq >= min_w)) {
-          if (!first_in_chain) {
-            int dg = dt < dq ? dq - dt : dt - dq;
-            // std::cerr << filter_num << " " << std::max(dt, dq) / 40 << " " << 6 * (100 + dq / 40) << " " << std::min(dt, dq) << "\n";
-            if (filter_num < std::max(dt, dq) / 40 || 6 * (100 + dq / 40) < std::min(dt, dq)) {  // add flag
-              a[i].y |= MM_SEED_BAND_MODE_MASK;// [cur_tpos, last_tpos] reg can used static band
-            }
+        if (dt >= min_w && dq >= min_w) {
+          int dg = dt < dq ? dq - dt : dt - dq;
+          // std::cerr << filter_num << " " << std::max(dt, dq) / 40 << " " << 6 * (100 + dq / 40) << " " << std::min(dt, dq) << "\n";
+          if (filter_num < std::max(dt, dq) / 40 || 6 * (100 + dq / 40) < std::min(dt, dq)) {  // add flag
+            a[i].y |= MM_SEED_BAND_MODE_MASK;// [cur_tpos, last_tpos] reg can used static band
           }
           filter_num = 0;
           kv_push(mm128_t, km, anchors, a[i]);
           last_tpos = cur_tpos, last_qpos = cur_qpos;
-          first_in_chain = false;
         }
       }
       else break;
@@ -360,23 +356,19 @@ int chain_dp(void* km, mm128_t* lchains, int n_lchains, mm128_v* _anchors, int m
   }
   // collect anchors of last chain: local_chains[cur_i]
   // pre_end_tpos = (pre_x >> 32) & 0x7fffffff, pre_end_qpos = (int32_t)pre_x;
-  bool first_in_last = true;
   while (i >= 0) {
     int cur_tpos = a[i].x, cur_qpos = (int32_t)a[i].y;
     filter_num++;
     int dt = last_tpos - cur_tpos, dq = last_qpos - cur_qpos;
-    if (first_in_last || (dt >= min_w && dq >= min_w)) {
-      if (!first_in_last) {
-        int dg = dt < dq ? dq - dt : dt - dq;
-        // std::cerr << filter_num << " " << std::max(dt, dq) / 40 << " " << 6 * (100 + dq / 40) << " " << std::min(dt, dq) << "\n";
-        if (filter_num < std::max(dt, dq) / 40 || 6 * (100 + dq / 40) < std::min(dt, dq)) {  // add flag
-          a[i].y |= MM_SEED_BAND_MODE_MASK;
-        }
+    if (dt >= min_w && dq >= min_w) {
+      int dg = dt < dq ? dq - dt : dt - dq;
+      // std::cerr << filter_num << " " << std::max(dt, dq) / 40 << " " << 6 * (100 + dq / 40) << " " << std::min(dt, dq) << "\n";
+      if (filter_num < std::max(dt, dq) / 40 || 6 * (100 + dq / 40) < std::min(dt, dq)) {  // add flag
+        a[i].y |= MM_SEED_BAND_MODE_MASK;
       }
       filter_num = 0;
       kv_push(mm128_t, km, anchors, a[i]);
       last_tpos = cur_tpos, last_qpos = cur_qpos;
-      first_in_last = false;
     }
     if (i == (cur_y >> 32)) break;
     i--;
