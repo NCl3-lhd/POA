@@ -201,7 +201,7 @@ void minimizer_t::init(para_t* para, const std::vector<seq_t>& seqs) {
 };
 
 void minimizer_t::get_guide_tree(para_t* para) {
-  if ((para->progressive_poa || seqs_size < 5000) && seqs_size >= 2) {
+  if (para->progressive_poa && seqs_size >= 2) {
     // copy mm1 to mm2
     mm128_v mm_tv = { 0, 0, nullptr };
     for (int i = 0; i < (int)mm_v.n; ++i) kv_push(mm128_t, km, mm_tv, mm_v.a[i]);
