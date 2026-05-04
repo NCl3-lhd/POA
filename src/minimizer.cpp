@@ -150,7 +150,7 @@ int minimizer_t::collect_mm(void* km, const std::vector<seq_t>& seqs, para_t* pa
     mm_h[i + 1] = mm_v.n;
     if (para->verbose && i % 10 == 0) {
       std::cerr << "[" << i << "/" << seqs.size() << "]" << "\n";
-      std::cerr << seqs[i].seq.size() << " " << mm_h[i + 1] - mm_h[i] << "\n";
+      // std::cerr << seqs[i].seq.size() << " " << mm_h[i + 1] - mm_h[i] << "\n";
     }
   }
   return mm_v.n;
@@ -199,8 +199,9 @@ void minimizer_t::init(para_t* para, const std::vector<seq_t>& seqs) {
   }
 
 };
+
 void minimizer_t::get_guide_tree(para_t* para) {
-  if (para->progressive_poa && seqs_size >= 2) {
+  if ((para->progressive_poa || seqs_size < 5000) && seqs_size >= 2) {
     // copy mm1 to mm2
     mm128_v mm_tv = { 0, 0, nullptr };
     for (int i = 0; i < (int)mm_v.n; ++i) kv_push(mm128_t, km, mm_tv, mm_v.a[i]);
@@ -224,49 +225,56 @@ void minimizer_t::get_guide_tree(para_t* para) {
     // # total hits for i and j (i>j): mm_hit_n[(i*(i+1)/2)+j]
     // std::cerr << mm_tv.n << "\n";
     radix_sort_mm128x(mm_tv.a, mm_tv.a + mm_tv.n); // sort mm by k-mer hash values
-    // std::cerr << "finish sort" << "\n";
+
     uint64_t last_x = mm_tv.a[0].x;
-    int* mm_cnt = (int*)malloc(seqs_size * sizeof(int));
-    for (_i = 0, i = 1; i < mm_tv.n; ++i) { // collect mm hits
-      if (para->verbose && i % 1000 == 0) std::cerr << "[" << i << "/" << mm_tv.n << "]" << "\n";
-      if (mm_tv.a[i].x != last_x) {
-        // now [_i, i-1] have the same minimizer k-mer
-        memset(mm_cnt, 0, seqs_size * sizeof(int));
+    int *mm_cnt = (int *)calloc(seqs_size, sizeof(int));
+
+    // 【优化1】：用 vector 记录当前 minimizer 到底存在于哪些序列中
+    std::vector<int> present_rids;
+    present_rids.reserve(seqs_size);
+
+    // 注意：把条件放宽到 i <= mm_tv.n，利用尾部条件自动处理最后一块，省去你原来在循环外面复制的几十行代码
+    for (_i = 0, i = 1; i <= mm_tv.n; ++i) {
+      if (i == mm_tv.n || mm_tv.a[i].x != last_x) {
+        present_rids.clear();
         for (j = _i; j < i; ++j) {
-          // count mm->a[j]
           rid1 = mm_tv.a[j].y >> 32;
+          if (mm_cnt[rid1] == 0) present_rids.push_back(rid1);
           ++mm_cnt[rid1];
-          ++mm_hit_n[((rid1 * (rid1 + 1)) >> 1) + rid1];
         }
-        for (rid1 = 0; rid1 < seqs_size - 1; ++rid1) {
-          for (rid2 = rid1 + 1; rid2 < seqs_size; ++rid2) {
-            mm_hit_n[((rid2 * (rid2 + 1)) >> 1) + rid1] += std::min(mm_cnt[rid1], mm_cnt[rid2]);
+
+        // -------------------------------------------------------------
+        if (present_rids.size() > seqs_size * para->mm_filter_ratio) { 
+            for (int r : present_rids) mm_cnt[r] = 0; // 重置清理
+            if (i < mm_tv.n) { last_x = mm_tv.a[i].x; _i = i; }
+            continue; 
+        }
+
+        for (size_t k1 = 0; k1 < present_rids.size(); ++k1) {
+          rid1 = present_rids[k1];
+          // 处理 self-hit
+          mm_hit_n[((rid1 * (rid1 + 1)) >> 1) + rid1] += mm_cnt[rid1];
+
+          for (size_t k2 = k1 + 1; k2 < present_rids.size(); ++k2) {
+            rid2 = present_rids[k2];
+            int max_r = std::max(rid1, rid2);
+            int min_r = std::min(rid1, rid2);
+            mm_hit_n[((max_r * (max_r + 1)) >> 1) + min_r] += std::min(mm_cnt[rid1], mm_cnt[rid2]);
           }
         }
-        // next minimizer
-        last_x = mm_tv.a[i].x, _i = i;
-      }
-    }
-    // now [_i, i-1] have the same minimizer k-mer
-    memset(mm_cnt, 0, seqs_size * sizeof(int));
-    for (j = _i; j < i; ++j) {
-      // count mm->a[j]
-      rid1 = mm_tv.a[j].y >> 32;
-      ++mm_cnt[rid1];
-      ++mm_hit_n[((rid1 * (rid1 + 1)) >> 1) + rid1];
-    }
-    for (rid1 = 0; rid1 < seqs_size - 1; ++rid1) {
-      for (rid2 = rid1 + 1; rid2 < seqs_size; ++rid2) {
-        mm_hit_n[((rid2 * (rid2 + 1)) >> 1) + rid1] += std::min(mm_cnt[rid1], mm_cnt[rid2]);
+
+        // 极速重置 mm_cnt，避免 memset 整个大数组
+        for (int r : present_rids) mm_cnt[r] = 0;
+
+        if (i < mm_tv.n) {
+          last_x = mm_tv.a[i].x; _i = i;
+        }
       }
     }
     free(mm_cnt);
+
     // calculate jaccard similarity between each two sequences
-    double* jac_sim = (double*)calloc((seqs_size * (seqs_size)), sizeof(double));
-    // 0: 
-    // 1: 0 
-    // 2: 0 1 
-    // std::cerr << "flag" << "\n";
+    double *jac_sim = (double *)calloc((seqs_size * seqs_size), sizeof(double));
     double max_jac = -1.0, jac; int max_i = -1, max_j = -1;
     for (i = 0; i < (size_t)seqs_size; ++i) {
       for (j = 0; j < (size_t)seqs_size; ++j) {
@@ -281,110 +289,79 @@ void minimizer_t::get_guide_tree(para_t* para) {
         else {
           jac = (0.0 + shared_n) / tot_n;
           jac = jac * ((0.51 * len[i] / maxl) + (0.49 * len[j] / maxl));
-          // jac = 1 * jac + 0 * ((0.525 * len[i] / maxl) + (0.475 * len[j] / maxl));
         }
-        jac_sim[i * seqs_size + j] = jac; // jac_sim[i][j] = jac_sim[i*(i-1)/2 + j]
+        jac_sim[i * seqs_size + j] = jac;
         if (jac > max_jac) {
           max_jac = jac; max_i = i, max_j = j;
         }
       }
     }
 
-    // std::cerr << max_jac << " " << max_i << " " << max_j << "\n";
-    // build guide tree
-    // first pick two with the biggest jac (max_i, max_j)
     max_sim.resize(seqs_size);
-    int n_in_map = 2; ord[0] = max_i, ord[1] = max_j;
-    rid_to_ord[max_i] = 0;rid_to_ord[max_j] = 1;
+    std::vector<bool> in_ord(seqs_size, false);
+    std::vector<double> sum_jac(seqs_size, 0.0);       // 记录未加入节点与已加入群体的相似度和
+    std::vector<double> max_edge(seqs_size, -1.0);     // 记录未加入节点连接到树上的最大单边相似度
+    std::vector<int> best_parent(seqs_size, -1);       // 记录未加入节点的最佳父节点
+
+    int n_in_map = 2;
+    ord[0] = max_i; ord[1] = max_j;
+    rid_to_ord[max_i] = 0; rid_to_ord[max_j] = 1;
     max_sim[max_j] = max_i;
-    // then, pick one with biggest jac sum with existing sequence in ord
-    while (n_in_map < seqs_size) {
-      // std::cerr << n_in_map << " " << seqs_size << "\n";
-      max_jac = -1.0, max_j = seqs_size;
-      for (rid2 = 0; rid2 < seqs_size; ++rid2) {
-        jac = 0.0;
-        for (i = 0; i < (size_t)n_in_map; ++i) {
-          rid1 = ord[i];
-          if (rid1 == rid2) { jac = -1.0; break; }
-          // jac = std::max(jac, jac_sim[rid2 * seqs_size + rid1]);
-          jac += jac_sim[rid1 * seqs_size + rid2];
-        }
-        if (jac > max_jac) {
-          max_jac = jac;
-          max_j = rid2;
-        }
+    in_ord[max_i] = true; in_ord[max_j] = true;
+
+    // 初始化所有未加入节点的状态 (仅针对已放入树中的 max_i 和 max_j)
+    for (int v = 0; v < seqs_size; ++v) {
+      if (in_ord[v]) continue;
+      sum_jac[v] = jac_sim[max_i * seqs_size + v] + jac_sim[max_j * seqs_size + v];
+
+      if (jac_sim[max_i * seqs_size + v] >= jac_sim[max_j * seqs_size + v]) {
+        max_edge[v] = jac_sim[max_i * seqs_size + v]; best_parent[v] = max_i;
       }
-      max_i = -1;jac = 0.0;
-      for (i = 0; i < (size_t)n_in_map; ++i) {
-        rid1 = ord[i];
-        if (max_j == rid1) { jac = -1.0; continue; }
-        // jac = std::max(jac, jac_sim[rid2 * seqs_size + rid1]);
-        if (max_i == -1 || jac < jac_sim[rid1 * seqs_size + max_j]) {
-          jac = jac_sim[rid1 * seqs_size + max_j];
-          max_i = rid1;
-        }
+      else {
+        max_edge[v] = jac_sim[max_j * seqs_size + v]; best_parent[v] = max_j;
       }
-      max_sim[max_j] = max_i;
-      // std::cerr << jac << " " << max_sim[max_j] << " " << max_j << "\n";
-      if (max_i == seqs_size) {
-        std::cerr << __func__ << "Bug in progressive tree building. (2)" << "\n";
-        exit(EXIT_FAILURE);
-      }
-      rid_to_ord[max_j] = n_in_map;
-      ord[n_in_map++] = max_j;
     }
-    // // calculate jaccard similarity between each two sequences
-    // double* jac_sim = (double*)calloc((seqs_size * (seqs_size - 1)) >> 1, sizeof(double));
-    // // 0: 
-    // // 1: 0 
-    // // 2: 0 1 
-    // double max_jac = -1.0, jac; int max_i = -1, max_j = -1;
-    // for (i = 1; i < (size_t)seqs_size; ++i) {
-    //   for (j = 0; j < i; ++j) {
-    //     int tot_n = mm_hit_n[((i * (i + 1)) >> 1) + i] + mm_hit_n[((j * (j + 1)) >> 1) + j] - mm_hit_n[((i * (i + 1)) >> 1) + j];
-    //     if (tot_n == 0) jac = 0;
-    //     else if (tot_n < 0) {
-    //       std::cerr << __func__ << "Bug in progressive tree building. (1)" << "\n";
-    //       exit(EXIT_FAILURE);
-    //     }
-    //     else jac = (0.0 + mm_hit_n[((i * (i + 1)) >> 1) + j]) / tot_n;
-    //     jac_sim[((i * (i - 1)) >> 1) + j] = jac; // jac_sim[i][j] = jac_sim[i*(i-1)/2 + j]
-    //     if (jac > max_jac) {
-    //       max_jac = jac; max_i = i, max_j = j;
-    //     }
-    //   }
-    // }
 
-    // // std::cerr << max_jac << " " << max_i << " " << max_j << "\n";
-    // // build guide tree
-    // // first pick two with the biggest jac (max_i, max_j)
-    // int n_in_map = 2; ord[0] = max_j, ord[1] = max_i;
+    while (n_in_map < seqs_size) {
+      // 1. O(N) 寻找当前 sum_jac 最大的未加入节点
+      double best_sum = -1.0;
+      int u = -1;
+      for (int v = 0; v < seqs_size; ++v) {
+        if (!in_ord[v] && sum_jac[v] > best_sum) {
+          best_sum = sum_jac[v];
+          u = v;
+        }
+      }
 
-    // // then, pick one with biggest jac sum with existing sequence in ord
-    // while (n_in_map < seqs_size) {
-    //   // std::cerr << n_in_map << " " << seqs_size << "\n";
-    //   max_jac = -1.0, max_i = seqs_size;
-    //   for (rid1 = 0; rid1 < seqs_size; ++rid1) {
-    //     jac = 0.0;
-    //     for (i = 0; i < (size_t)n_in_map; ++i) {
-    //       rid2 = ord[i];
-    //       if (rid1 == rid2) { jac = -1.0; break; }
-    //       else if (rid1 > rid2) jac += jac_sim[((rid1 * (rid1 - 1)) >> 1) + rid2];
-    //       else jac += jac_sim[((rid2 * (rid2 - 1)) >> 1) + rid1];
-    //     }
-    //     if (jac > max_jac) {
-    //       max_jac = jac;
-    //       max_i = rid1;
-    //     }
-    //   }
-    //   if (max_i == seqs_size) {
-    //     std::cerr << __func__ << "Bug in progressive tree building. (2)" << "\n";
-    //     exit(EXIT_FAILURE);
-    //   }
-    //   ord[n_in_map++] = max_i;
-    // }
+      // 处理特殊孤岛情况，防止死循环
+      if (u == -1) {
+        for (int v = 0; v < seqs_size; ++v) if (!in_ord[v]) { u = v; break; }
+      }
 
-    free(mm_hit_n); free(jac_sim);
+      // 2. 将 u 加入树中
+      in_ord[u] = true;
+      ord[n_in_map] = u;
+      rid_to_ord[u] = n_in_map;
+      max_sim[u] = best_parent[u]; // 直接 O(1) 获取最佳父节点
+      n_in_map++;
+
+      // 3. O(N) 增量更新剩余节点的 sum_jac 和 best_parent (取代原本的 O(N^2) 扫描)
+      for (int v = 0; v < seqs_size; ++v) {
+        if (!in_ord[v]) {
+          double current_jac = jac_sim[u * seqs_size + v];
+          sum_jac[v] += current_jac;
+
+          // 如果新加入的 u 到 v 的距离，比 v 之前记录的父节点更好，就换父节点
+          if (current_jac > max_edge[v] || best_parent[v] == -1) {
+            max_edge[v] = current_jac;
+            best_parent[v] = u;
+          }
+        }
+      }
+    }
+
+    free(mm_hit_n);
+    free(jac_sim);
     // if (abpt->verbose >= ABPOA_INFO_VERBOSE) fprintf(stderr, "done!\n");
 
     kfree(km, mm_tv.a);

@@ -10,6 +10,7 @@ struct para_t {
   int b, f;// adband
   bool ab_band;
   int k, mm_w;// k-mer
+  float mm_filter_ratio;
   bool enable_seeding;
   int bw, poa_w;
   bool progressive_poa;

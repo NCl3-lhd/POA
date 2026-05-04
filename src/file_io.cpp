@@ -54,6 +54,7 @@ void readFile(para_t* para, std::vector<seq_t>& seqs, const char* path) {
 }
 // handle input arg
 void initPara(para_t* para) {
+  para->mm_filter_ratio = 0.25f;
   //handle incorrect para
   if (para->match < 0) para->m *= -1;
   if (para->mismatch > 0) para->mismatch *= -1;

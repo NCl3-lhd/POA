@@ -17,27 +17,26 @@ int main(int argc, char** argv) {
     ("input", "input path", cxxopts::value<std::string>())
     ("i,inc_fp", "incrementally align sequences to an existing graph", cxxopts::value<std::string>())
     ("m,mat_fp", "scoring matrix file path (requirement: N-N match score > N-other base score)", cxxopts::value<std::string>())
-    ("M,match", "match sorce", cxxopts::value<int>()->default_value("2"))
-    ("X,mismatch", "mismatch sorce", cxxopts::value<int>()->default_value("-4"))
-    ("O,gap_open", "gap_open sorce", cxxopts::value<int>()->default_value("-4"))
-    ("E,gap_ext", "gap_ext sorce", cxxopts::value<int>()->default_value("-2"))
+    ("M,match", "match score", cxxopts::value<int>()->default_value("2"))
+    ("X,mismatch", "mismatch penalty", cxxopts::value<int>()->default_value("-4"))
+    ("O,gap_open", "gap open penalty", cxxopts::value<int>()->default_value("-4"))
+    ("E,gap_ext", "gap extension penalty", cxxopts::value<int>()->default_value("-2"))
     ("t,thread", "thread number", cxxopts::value<int>()->default_value("1"))
-    ("b,band_b", "band arg", cxxopts::value<int>()->default_value("100"))
-    ("f,band_f", "band arg", cxxopts::value<int>()->default_value("40"))
-    ("B,ab_band", "enable adpative band strategy", cxxopts::value<bool>()->default_value("false"))
+    ("b,band_b", "base band width (total band = b + seq_len / f)", cxxopts::value<int>()->default_value("100"))
+    ("f,band_f", "band expansion factor (smaller = wider band)", cxxopts::value<int>()->default_value("40"))
+    ("B,ab_band", "enable adaptive band", cxxopts::value<bool>()->default_value("false"))
     ("S,seeding", "enable minimizer-based seeding and anchoring", cxxopts::value<bool>()->default_value("false"))
     ("W,poa_w", "the minimum distance between adjacent anchors", cxxopts::value<int>()->default_value("20000"))
-    ("k,k_mer", "k_mer lenth", cxxopts::value<int>()->default_value("19")) //19
-    ("w,mm_w", "k_mer_window lenth", cxxopts::value<int>()->default_value("10"))
-    ("s,sample_num", "sample_num", cxxopts::value<int>()->default_value("50"))
-    ("p,progressive_poa", "is progressive_poa", cxxopts::value<bool>()->default_value("false"))
+    ("k,k_mer", "k-mer length", cxxopts::value<int>()->default_value("19")) //19
+    ("w,mm_w", "minimizer window length", cxxopts::value<int>()->default_value("10"))
+    ("p,progressive_poa", "enable progressive POA guide tree", cxxopts::value<bool>()->default_value("false"))
     ("r,result", "result format (0-2). 0: consensus, 1: rc-msa, 2: gfa", cxxopts::value<int>()->default_value("0"))
     ("V,verbose", "verbose level (0-2). 0: none, 1: information, 2: debug [0]\n", cxxopts::value<int>()->default_value("0"))
     ("h,help", "Print usage")
     ("v,version", "Print version")
+    ("mm-filter-ratio", "minimizer filter ratio for guide tree construction", cxxopts::value<float>()->default_value("0.25"))
     ;
   options.parse_positional({ "input" });
-  int sample_num;
   std::string path;
   para_t* para = new para_t();
   try {
@@ -75,10 +74,9 @@ int main(int argc, char** argv) {
     para->mm_w = result["mm_w"].as<int>();
     para->bw = 1000;
     para->progressive_poa = result["progressive_poa"].as<bool>();
+    para->mm_filter_ratio = result["mm-filter-ratio"].as<float>();
     para->enable_seeding = result["seeding"].as<bool>();
     para->thread = result["thread"].as<int>();
-    sample_num = result["sample_num"].as<int>();
-    if (sample_num < 0) sample_num *= -1;
     para->result = result["result"].as<int>();
     para->verbose = result["verbose"].as<int>();
 
