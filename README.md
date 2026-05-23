@@ -93,9 +93,12 @@ minipoa input.fasta -B -b 10 -f 100 > output.fasta
 ```bash
 minipoa input.fasta -f 0 > output.fasta
 ```
+### Minimizer-Based Guide Tree Construction
+`-p` : Optimize the alignment order by constructing a guide tree. Both the time and space complexity for this process are $O(N^2)$, where $N$ is the number of sequences.
+
 
 ### Anchor Chain Optimization & Acceleration
-`-S` : Enable anchor chain optimization. Please note that enabling this option will **force-enable** the adaptive band strategy to maintain alignment robustness.
+`-S` : Enable anchor chain optimization. Please note that enabling this option will dynamically select between a static band and an adaptive band strategy based on the characteristics of the delineated alignment region to maintain alignment robustness.
 
 `-W` : Adjust the window distance  parameter for anchors.
 * **Recommended Range**: Values between `500` and `query_length / 24` are generally appropriate.

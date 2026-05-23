@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.9)
 
-project(minipoa VERSION 1.0.0
+project(minipoa VERSION 1.4.2
     LANGUAGES C CXX
-    DESCRIPTION "Spoa is a c++ library (and tool) for SIMD vectorized partial order alignment.")
+    DESCRIPTION "Minipoa: A minimizer-based method for fast and memory-efficient partial order alignment.")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 11)
